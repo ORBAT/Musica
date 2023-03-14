@@ -1,0 +1,6 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+ImplicitArrays = "2c62951c-9479-4435-88c8-614a84373d38"
+
+[compat]
+Documenter = "~0.27"
