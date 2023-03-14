@@ -1,0 +1,5 @@
+[deps]
+CellularAutomata = "878138dc-5b27-11ea-1a71-cb95d38d6b29"
+Metaheuristics = "bcdb8e00-2c21-11e9-3065-2b553b22f898"
+Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
