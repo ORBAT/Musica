@@ -10,4 +10,8 @@ Musica.fuck + 1
 module Musica
 const fuck = 1
 export fuck
+
+include("CA.jl")
+export CA
 end
+

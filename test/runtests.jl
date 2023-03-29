@@ -1,16 +1,10 @@
 using Test
 using SafeTestsets
-using Musica
-using Documenter
 
-DocMeta.setdocmeta!(Musica, :DocTestSetup, :(using Musica), recursive=true)
-
-@testset "Musica" begin
-  @safetestset "includettu" begin
-    include("jokutesti.jl")
-  end
+@safetestset "Musica" begin
+  include("Musica.jl")
 end
 
-@testset "doctests" begin
-  doctest(Musica, manual=false)
+@safetestset "CA" begin
+  include("CA.jl")
 end
