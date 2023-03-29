@@ -1,6 +1,9 @@
 using Test
 using SafeTestsets
+using Musica
 
 @testset "Blerg" begin
-  @test 1 == 1
+  @safetestset "includettu" begin
+    include("jokutesti.jl")
+  end
 end
