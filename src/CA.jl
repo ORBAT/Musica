@@ -1,36 +1,48 @@
 module CA
 using Transducers
 using StaticArrays
-using ComputedFieldTypes
 
+Row{L} = SVector{L,Int}
 
-# struct DiscreteCA{NStates<:Int,Radius<:Int}
-#   rule::Int
-#   ruleset::SVector{NStates^(2 * Radius + 1),Int}
-#   nstates::Int
-#   radius::Int
-
-#   function DiscreteCA{NStates,Radius}(rule::Int) where {NStates<:Int,Radius<:Int}
-#     new(rule, _rule_to_ruleset(rule, Val{NStates}(), Val{Radius}()), NStates, Radius)
-#   end
-# end
-
-struct DC3{NStates,Radius,RuleLen}
+struct Discrete{NStates,Radius,RuleLen}
   rule::Int
   ruleset::SVector{RuleLen,Int}
   nstates::Int
   radius::Int
 
-  function DC3{NStates,Radius,RuleLen}(rule::Int) where {NStates,Radius,RuleLen}
-    new(rule, _rule_to_ruleset_s(rule, Val{NStates}(), Val{Radius}(), Val{RuleLen}()), NStates, Radius)
+  function Discrete{NStates,Radius,RuleLen}(rule::Int) where {NStates,Radius,RuleLen}
+    @assert rule ≥ 0 && rule < (NStates^RuleLen) "rule number for $(NStates) states must be ≥ 0 and < $(NStates^RuleLen), was $(rule)"
+    @assert RuleLen == NStates^(2 * Radius + 1) "RuleLen must be NStates^(2 * Radius + 1)"
+    new(rule, rule_to_ruleset(rule, Val{NStates}(), Val{Radius}()), NStates, Radius)
   end
 end
 
-function DC3{NStates,Radius}(rule::Int) where {NStates,Radius}
-  DC3{NStates,Radius,NStates^(2 * Radius + 1)}(rule)
+function Discrete{NStates,Radius}(rule::Int) where {NStates,Radius}
+  Discrete{NStates,Radius,NStates^(2 * Radius + 1)}(rule)
 end
 
-Discrete = DC3
+function (dca::Discrete{NS,RD,RL})(state, generations::Int) where {NS,RD,RL}
+  res = Vector{typeof(state)}(undef)
+  res[1, :] = state
+  for i in 2:generations
+    state = dca(state)
+    res[i, :] = state
+  end
+  res
+end
+
+function (dca::Discrete{NS,RD,RL})(state::Row{L}) where {NS,RD,RL,L}
+  neighborhood_size = RD * 2 + 1
+  # state wraps around at the ends
+  (state[end-neighborhood_size÷2+1:end], state, state[1:neighborhood_size÷2]) |> Cat() |>
+  Consecutive(neighborhood_size, 1) |>
+  Map(x -> begin
+    idx = undigits(x, NS) + 1
+    dca.ruleset[idx]
+  end) |>
+  collect |>
+  similar_type(state)
+end
 
 """
     CA.undigits(d, base=2)
@@ -61,14 +73,12 @@ julia> show(x)
 ```
 """
 function rule_to_ruleset(rule::Int, nstates::Int=2, radius::Int=1)
-  rule_len = nstates^(2 * radius + 1)
-  _rule_to_ruleset_s(rule, Val(nstates), Val(radius), Val(rule_len))
+  rule_to_ruleset(rule, Val(nstates), Val(radius))
 end
 
-
-function _rule_to_ruleset_s(rule::Int, ::Val{NStates}, ::Val{Radius}, ::Val{RuleLen}) where {NStates,Radius,RuleLen}
-  @assert rule ≥ 0 && rule < (NStates^RuleLen) "rule number for $(NStates) states must be ≥ 0 and < $(NStates^RuleLen), was $(rule)"
-  SVector{RuleLen}(digits(Int, rule, base=NStates, pad=RuleLen))
+function rule_to_ruleset(rule::Int, ::Val{NStates}, ::Val{Radius}) where {NStates,Radius}
+  RuleLen = NStates^(2 * Radius + 1)
+  SVector{RuleLen,Int}(digits(Int, rule, base=NStates, pad=RuleLen))
 end
 
 end # module CA

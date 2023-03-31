@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "7ec8936b957aa3ebe0deed1c2a4063cf5420333f"
+project_hash = "449e90386595eca426b0c086aedc0a46844ded36"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -70,6 +70,7 @@ uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+1"
 
 [[deps.CellularAutomata]]
+deps = ["Transducers"]
 path = "dev/CellularAutomata"
 uuid = "878138dc-5b27-11ea-1a71-cb95d38d6b29"
 version = "0.0.2"
@@ -142,6 +143,11 @@ version = "1.0.1+0"
 git-tree-sha1 = "455419f7e328a1a2493cabc6428d79e951349769"
 uuid = "a33af91c-f02d-484b-be07-31d278c5ca2b"
 version = "0.1.1"
+
+[[deps.ComputedFieldTypes]]
+git-tree-sha1 = "059a8d396af73d574b679223c91ce209c0d3d809"
+uuid = "459fdd68-db75-56b8-8c15-d717a790f88e"
+version = "1.0.1"
 
 [[deps.ConsoleProgressMonitor]]
 deps = ["Logging", "ProgressMeter"]
@@ -877,6 +883,12 @@ deps = ["Setfield", "Test"]
 git-tree-sha1 = "e08a62abc517eb79667d0a29dc08a3b589516bb5"
 uuid = "171d559e-b47b-412a-8079-5efa626c420e"
 version = "0.1.15"
+
+[[deps.StaticArrays]]
+deps = ["LinearAlgebra", "Random", "StaticArraysCore", "Statistics"]
+git-tree-sha1 = "b8d897fe7fa688e93aef573711cb207c08c9e11e"
+uuid = "90137ffa-7385-5640-81b9-e52037218182"
+version = "1.5.19"
 
 [[deps.StaticArraysCore]]
 git-tree-sha1 = "6b7ba252635a5eff6a0b0664a41ee140a1c9e72a"
