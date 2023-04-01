@@ -4,24 +4,26 @@ using StaticArrays
 
 Row{L} = SVector{L,Int}
 
-struct Discrete{NStates,Radius,RuleLen}
+struct DS2{NStates,Radius,RuleLen}
   rule::Int
   ruleset::SVector{RuleLen,Int}
   nstates::Int
   radius::Int
 
-  function Discrete{NStates,Radius,RuleLen}(rule::Int) where {NStates,Radius,RuleLen}
+  function DS2{NStates,Radius,RuleLen}(rule::Int) where {NStates,Radius,RuleLen}
     @assert rule ≥ 0 && rule < (NStates^RuleLen) "rule number for $(NStates) states must be ≥ 0 and < $(NStates^RuleLen), was $(rule)"
     @assert RuleLen == NStates^(2 * Radius + 1) "RuleLen must be NStates^(2 * Radius + 1)"
     new(rule, rule_to_ruleset(rule, Val{NStates}(), Val{Radius}()), NStates, Radius)
   end
 end
 
+Discrete = DS2
+
 function Discrete{NStates,Radius}(rule::Int) where {NStates,Radius}
   Discrete{NStates,Radius,NStates^(2 * Radius + 1)}(rule)
 end
 
-function (dca::Discrete{NS,RD,RL})(state, generations::Int) where {NS,RD,RL}
+function (dca::Discrete{NS,RD,RuL})(state, generations::Int) where {NS,RD,RuL}
   res = Vector{typeof(state)}(undef, generations)
   res[1] = state
   for i in 2:generations
@@ -31,7 +33,7 @@ function (dca::Discrete{NS,RD,RL})(state, generations::Int) where {NS,RD,RL}
   res
 end
 
-function (dca::Discrete{NS,RD,RL})(state) where {NS,RD,RL}
+function (dca::Discrete{NS,RD,RuL})(state) where {NS,RD,RuL}
   neighborhood_size = RD * 2 + 1
   # state wraps around at the ends
   (state[end-neighborhood_size÷2+1:end], state, state[1:neighborhood_size÷2]) |> Cat() |>
