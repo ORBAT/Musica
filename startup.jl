@@ -1,5 +1,4 @@
-using Test
-using Transducers
-using StaticArrays
+using Test, Transducers, StaticArrays, Evolutionary
+
 includet("src/Musica.jl")
 includet("src/CA.jl")

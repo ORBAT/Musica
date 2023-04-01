@@ -23,15 +23,15 @@ function Discrete{NStates,Radius}(rule::Int) where {NStates,Radius}
   Discrete{NStates,Radius,NStates^(2 * Radius + 1)}(rule)
 end
 
-function (dca::Discrete{NS,RD,RuL})(state, generations::Int) where {NS,RD,RuL}
-  res = Vector{typeof(state)}(undef, generations)
-  res[1] = state
-  for i in 2:generations
-    state = dca(state)
-    res[i] = state
-  end
-  res
-end
+# function (dca::Discrete{NS,RD,RuL})(state, generations::Int) where {NS,RD,RuL}
+#   res = Vector{typeof(state)}(undef, generations)
+#   res[1] = state
+#   for i in 2:generations
+#     state = dca(state)
+#     res[i] = state
+#   end
+#   res
+# end
 
 function (dca::Discrete{NS,RD,RuL})(state) where {NS,RD,RuL}
   neighborhood_size = RD * 2 + 1
