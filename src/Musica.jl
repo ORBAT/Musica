@@ -1,5 +1,5 @@
 module Musica
 include("CA.jl")
-export CA
+export DiscreteCA
 end
 

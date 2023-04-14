@@ -1,4 +1,3 @@
-module CA
 using Transducers, StaticArrays, TestItems, Test
 
 struct DS2{NStates,Radius,RuleLen}
@@ -14,17 +13,16 @@ struct DS2{NStates,Radius,RuleLen}
   end
 end
 
-Discrete = DS2
+DiscreteCA = DS2
 
-function Discrete{NStates,Radius}(rule::Int) where {NStates,Radius}
-  Discrete{NStates,Radius,NStates^(2 * Radius + 1)}(rule)
+function DiscreteCA{NStates,Radius}(rule::Int) where {NStates,Radius}
+  DiscreteCA{NStates,Radius,NStates^(2 * Radius + 1)}(rule)
 end
 
 @testitem "CA initialization" begin
-  @test_throws AssertionError CA.Discrete{2,1}(256)
-  @test_throws AssertionError CA.Discrete{2,1}(-1)
-  @test_throws AssertionError CA.Discrete{3,1}(3^27)
-  @test CA.rule_to_ruleset(22, 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
+  @test_throws AssertionError DiscreteCA{2,1}(256)
+  @test_throws AssertionError DiscreteCA{2,1}(-1)
+  @test_throws AssertionError DiscreteCA{3,1}(3^27)
 end
 
 """
@@ -33,7 +31,7 @@ end
 
 **HOX HOX** kokeillu vähän kaikkea mutta tän return type jostain syystä vaan tahtoo olla `any` jos statea ei tyypitä
 """
-function (dca::Discrete{NS,RD,RuL})(state::T)::T where {NS,RD,RuL,T}
+function (dca::DiscreteCA{NS,RD,RuL})(state::T)::T where {NS,RD,RuL,T}
   neighborhood_size = RD * 2 + 1
 
 
@@ -52,34 +50,34 @@ end
 @testitem "evolution" begin
   using StaticArrays
   state = @SVector [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-  ca = CA.Discrete{2,1}(110)
+  ca = DiscreteCA{2,1}(110)
 
   @test ca(state) == [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   @inferred(ca(state))
 end
 
 """
-    CA.undigits(d, base=2)
+    undigits(d, base=2)
 
 Treat d as a little-endian vector of digits in `base` and return the base-10 representation.
 
 ```jldoctest
-julia> CA.undigits([0, 1, 1, 1, 1, 0, 0, 0])
+julia> Musica.undigits([0, 1, 1, 1, 1, 0, 0, 0])
 30
 
-julia> CA.undigits(CA.rule_to_ruleset(22, 3), 3)
+julia> Musica.undigits(Musica.rule_to_ruleset(22, 3), 3)
 22
 ```
 """
 undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=0)
 
 """
-    CA.rule_to_ruleset(rule::Int, nstates::Int = 2, radius::Int = 1)
+    rule_to_ruleset(rule::Int, nstates::Int = 2, radius::Int = 1)
 
 Return a little-endian vector for the transition rule padded to the max rule length
 
 ```jldoctest
-julia> x = CA.rule_to_ruleset(30);
+julia> x = Musica.rule_to_ruleset(30);
 
 julia> show(x)
 [0, 1, 1, 1, 1, 0, 0, 0]
@@ -95,4 +93,6 @@ function rule_to_ruleset(rule::Int, ::Val{NStates}, ::Val{Radius}) where {NState
   SVector{RuleLen,Int}(digits(Int, rule, base=NStates, pad=RuleLen))
 end
 
-end # module CA
+@testitem "Rule number to ruleset" begin
+  @test Musica.rule_to_ruleset(22, 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
+end
