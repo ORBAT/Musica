@@ -1,6 +1,6 @@
 module CA
-using Transducers
-using StaticArrays
+using Transducers, StaticArrays, TestItems, Test
+
 
 Row{L} = SVector{L,Int}
 
@@ -23,6 +23,13 @@ function Discrete{NStates,Radius}(rule::Int) where {NStates,Radius}
   Discrete{NStates,Radius,NStates^(2 * Radius + 1)}(rule)
 end
 
+@testitem "CA initialization" begin
+  @test_throws AssertionError CA.Discrete{2,1}(256)
+  @test_throws AssertionError CA.Discrete{2,1}(-1)
+  @test_throws AssertionError CA.Discrete{3,1}(3^27)
+  @test CA.rule_to_ruleset(22, 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
+end
+
 # function (dca::Discrete{NS,RD,RuL})(state, generations::Int) where {NS,RD,RuL}
 #   res = Vector{typeof(state)}(undef, generations)
 #   res[1] = state
@@ -33,18 +40,36 @@ end
 #   res
 # end
 
-function (dca::Discrete{NS,RD,RuL})(state) where {NS,RD,RuL}
+"""
+* `NS` = `NStates`
+* `RD` = `Radius`
+
+**HOX HOX** kokeillu vähän kaikkea mutta tän return type jostain syystä vaan tahtoo olla `any` jos statea ei tyypitä
+"""
+function (dca::Discrete{NS,RD,RuL})(state::T)::T where {NS,RD,RuL,T}
   neighborhood_size = RD * 2 + 1
+
+
   # state wraps around at the ends
   (state[end-neighborhood_size÷2+1:end], state, state[1:neighborhood_size÷2]) |> Cat() |>
-  Consecutive(neighborhood_size, 1) |>
+  Consecutive(neighborhood_size, 1) |> # slice into windows of neighborhood_size, 1 step at a time
   Map(x -> begin
+    # turn each neighborhood x into a number, use that to index into the ruleset to get the result
     idx = undigits(x, NS) + 1
     dca.ruleset[idx]
   end) |>
   collect |>
-  similar_type(state)
+  similar_type(T)
 end
+
+@testitem "evolution" begin
+  using StaticArrays
+  state = @SVector [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  ca = CA.Discrete{2,1}(110)
+
+  @test ca(state) == [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  @test @inferred(ca(state)) broken=true
+end;
 
 """
     CA.undigits(d, base=2)

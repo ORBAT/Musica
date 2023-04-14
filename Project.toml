@@ -1,5 +1,6 @@
 name = "Musica"
 uuid = "b7355d43-d5bc-4bd6-b9cb-a8ac25e01657"
+version = "0.0.1"
 
 [deps]
 CellularAutomata = "878138dc-5b27-11ea-1a71-cb95d38d6b29"
@@ -15,4 +16,5 @@ Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+TestItems = "1c621080-faea-4a02-84b6-bbd5e436b8fe"
 Transducers = "28d57a85-8fef-5791-bfe6-a80928e7c999"
