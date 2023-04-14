@@ -1,9 +1,6 @@
 module CA
 using Transducers, StaticArrays, TestItems, Test
 
-
-Row{L} = SVector{L,Int}
-
 struct DS2{NStates,Radius,RuleLen}
   rule::Int
   ruleset::SVector{RuleLen,Int}
@@ -11,7 +8,7 @@ struct DS2{NStates,Radius,RuleLen}
   radius::Int
 
   function DS2{NStates,Radius,RuleLen}(rule::Int) where {NStates,Radius,RuleLen}
-    @assert rule ≥ 0 && rule < (NStates^RuleLen) "rule number for $(NStates) states must be ≥ 0 and < $(NStates^RuleLen), was $(rule)"
+    @assert 0 ≤ rule < (NStates^RuleLen) "rule number for $(NStates) states must be ≥ 0 and < $(NStates^RuleLen), was $(rule)"
     @assert RuleLen == NStates^(2 * Radius + 1) "RuleLen must be NStates^(2 * Radius + 1)"
     new(rule, rule_to_ruleset(rule, Val{NStates}(), Val{Radius}()), NStates, Radius)
   end
@@ -29,16 +26,6 @@ end
   @test_throws AssertionError CA.Discrete{3,1}(3^27)
   @test CA.rule_to_ruleset(22, 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
 end
-
-# function (dca::Discrete{NS,RD,RuL})(state, generations::Int) where {NS,RD,RuL}
-#   res = Vector{typeof(state)}(undef, generations)
-#   res[1] = state
-#   for i in 2:generations
-#     state = dca(state)
-#     res[i] = state
-#   end
-#   res
-# end
 
 """
 * `NS` = `NStates`
