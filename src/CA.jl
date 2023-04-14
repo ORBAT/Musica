@@ -68,8 +68,8 @@ end
   ca = CA.Discrete{2,1}(110)
 
   @test ca(state) == [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-  @test @inferred(ca(state)) broken=true
-end;
+  @inferred(ca(state))
+end
 
 """
     CA.undigits(d, base=2)
