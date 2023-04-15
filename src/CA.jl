@@ -1,19 +1,17 @@
 using Transducers, StaticArrays, TestItems, Test
 
-struct DS2{NStates,Radius,RuleLen}
+struct DiscreteCA{NStates,Radius,RuleLen}
   rule::Int
   ruleset::SVector{RuleLen,Int}
   nstates::Int
   radius::Int
 
-  function DS2{NStates,Radius,RuleLen}(rule::Int) where {NStates,Radius,RuleLen}
+  function DiscreteCA{NStates,Radius,RuleLen}(rule::Int) where {NStates,Radius,RuleLen}
     @assert 0 ≤ rule < (NStates^RuleLen) "rule number for $(NStates) states must be ≥ 0 and < $(NStates^RuleLen), was $(rule)"
     @assert RuleLen == NStates^(2 * Radius + 1) "RuleLen must be NStates^(2 * Radius + 1)"
     new(rule, rule_to_ruleset(rule, Val{NStates}(), Val{Radius}()), NStates, Radius)
   end
 end
-
-DiscreteCA = DS2
 
 function DiscreteCA{NStates,Radius}(rule::Int) where {NStates,Radius}
   DiscreteCA{NStates,Radius,NStates^(2 * Radius + 1)}(rule)
@@ -33,8 +31,6 @@ end
 """
 function (dca::DiscreteCA{NS,RD,RuL})(state::T)::T where {NS,RD,RuL,T}
   neighborhood_size = RD * 2 + 1
-
-
   # state wraps around at the ends
   (state[end-neighborhood_size÷2+1:end], state, state[1:neighborhood_size÷2]) |> Cat() |>
   Consecutive(neighborhood_size, 1) |> # slice into windows of neighborhood_size, 1 step at a time
