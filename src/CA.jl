@@ -31,23 +31,39 @@ end
 """
 function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,State}
   new_state = similar(State, axes(state))
-  neighborhood_size = RD * 2 + 1
-  
   # transducer that:
-  # – slices into windows of neighborhood_size, 1 step at a time
-  # – turns each neighborhood x into a number, uses that to index into the ruleset to get the result
-  # – enumerates the result into tuples of (idx, value)
-  xf = Consecutive(neighborhood_size, 1) |> 
-  Map(x -> dca.ruleset[undigits(x, NS) + 1]) |>
-  Enumerate()
-  
+
+  xf = transducer(dca)
+
   # state wraps around at the ends
-  wrapped_state = (state[end-neighborhood_size÷2+1:end], state, state[1:neighborhood_size÷2]) |> Cat()
+  wrapped_state = wrapped_state_eduction(state, RD)
   # run wrapped_state through xf, fold it into new_state 
-  foldl(xf, wrapped_state; init = new_state) do acc, (idx, a) 
-    acc[idx] = a
-    acc
-  end
+  _collect_into(xf, wrapped_state, new_state)
+end
+
+"Feeds `foldable` into `xf` and collects the result into `init_state`"
+_collect_into(xf, foldable, init_state) = foldl(xf |> Enumerate(), foldable; init=init_state) do acc, (idx, a)
+  # folds xf into init_state
+  acc[idx] = a
+  acc
+end
+
+"""Make `state` wrap around at the ends by prepending the neighb_size÷2 last elements and appending first elements.
+
+Returns an eduction.
+"""
+wrapped_state_eduction(state, radius) = (@view(state[end-radius+1:end]), state, @view(state[1:radius])) |> Cat()
+
+neighborhood_size(::Type{DiscreteCA{NS,RD,RuL}}) where {NS, RD, RuL} = RD * 2 + 1
+
+"""Returns a transducer that applies the CA's rule.
+
+- slices into windows of length neighborhood_size, 1 step at a time
+- turns each neighborhood x into a number, uses that to index into the ruleset to get the result
+"""
+@inline function transducer(dca::T) where {NS,RD,RuL, T <: DiscreteCA{NS,RD,RuL}}
+  Consecutive(neighborhood_size(T), 1) |>
+  Map(x -> dca.ruleset[undigits(x, NS)+1])
 end
 
 @testitem "evolution" begin
