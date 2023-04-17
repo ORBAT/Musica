@@ -3,6 +3,7 @@ uuid = "b7355d43-d5bc-4bd6-b9cb-a8ac25e01657"
 version = "0.0.1"
 
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CellularAutomata = "878138dc-5b27-11ea-1a71-cb95d38d6b29"
 ComputedFieldTypes = "459fdd68-db75-56b8-8c15-d717a790f88e"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"

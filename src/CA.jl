@@ -29,18 +29,25 @@ end
 
 **HOX HOX** kokeillu vähän kaikkea mutta tän return type jostain syystä vaan tahtoo olla `any` jos statea ei tyypitä
 """
-function (dca::DiscreteCA{NS,RD,RuL})(state::T)::T where {NS,RD,RuL,T}
+function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,State}
+  new_state = similar(State, axes(state))
   neighborhood_size = RD * 2 + 1
+  
+  # transducer that:
+  # – slices into windows of neighborhood_size, 1 step at a time
+  # – turns each neighborhood x into a number, uses that to index into the ruleset to get the result
+  # – enumerates the result into tuples of (idx, value)
+  xf = Consecutive(neighborhood_size, 1) |> 
+  Map(x -> dca.ruleset[undigits(x, NS) + 1]) |>
+  Enumerate()
+  
   # state wraps around at the ends
-  (state[end-neighborhood_size÷2+1:end], state, state[1:neighborhood_size÷2]) |> Cat() |>
-  Consecutive(neighborhood_size, 1) |> # slice into windows of neighborhood_size, 1 step at a time
-  Map(x -> begin
-    # turn each neighborhood x into a number, use that to index into the ruleset to get the result
-    idx = undigits(x, NS) + 1
-    dca.ruleset[idx]
-  end) |>
-  collect |>
-  similar_type(T)
+  wrapped_state = (state[end-neighborhood_size÷2+1:end], state, state[1:neighborhood_size÷2]) |> Cat()
+  # run wrapped_state through xf, fold it into new_state 
+  foldl(xf, wrapped_state; init = new_state) do acc, (idx, a) 
+    acc[idx] = a
+    acc
+  end
 end
 
 @testitem "evolution" begin
