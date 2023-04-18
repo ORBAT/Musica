@@ -31,26 +31,23 @@ end
 """
 function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,State}
   new_state = similar(State, axes(state))
-  # transducer that:
-
-  xf = transducer(dca)
-
   # state wraps around at the ends
   wrapped_state = wrapped_state_eduction(state, RD)
   # run wrapped_state through xf, fold it into new_state 
-  _collect_into(xf, wrapped_state, new_state)
+  xf = transducer(dca)
+  _collect_into!(xf, wrapped_state, new_state)
 end
 
-"Feeds `foldable` into `xf` and collects the result into `init_state`"
-_collect_into(xf, foldable, init_state) = foldl(xf |> Enumerate(), foldable; init=init_state) do acc, (idx, a)
+"Feeds `foldable` into `xf` and collects the result into `init_state`. Mutates `init_state`"
+_collect_into!(xf, foldable, init_state) = foldl(xf |> Enumerate(), foldable; init=init_state) do acc, (idx, a)
   # folds xf into init_state
   acc[idx] = a
   acc
 end
 
-"""Make `state` wrap around at the ends by prepending the neighb_size÷2 last elements and appending first elements.
+"""Make `state` wrap around at the ends by prepending the `radius` last elements and appending first elements.
 
-Returns an eduction.
+Returns an [eduction](https://juliafolds.github.io/Transducers.jl/stable/reference/manual/#Transducers.eduction).
 """
 wrapped_state_eduction(state, radius) = (@view(state[end-radius+1:end]), state, @view(state[1:radius])) |> Cat()
 
@@ -115,3 +112,4 @@ end
 @testitem "Rule number to ruleset" begin
   @test Musica.rule_to_ruleset(22, 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
 end
+
