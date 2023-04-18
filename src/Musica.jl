@@ -1,11 +1,12 @@
 module Musica
+include("transformations.jl")
+include("macros.jl")
+
 include("CA.jl")
-export DiscreteCA
+export DiscreteCA, Row
 
 include("Neuron.jl")
 export CANeuron
-
-include("conversions.jl")
 
 end
 
