@@ -1,4 +1,4 @@
-using TestItems, Test, Lazy
+using TestItems, Test
 
 abstract type Neuron{InWidth,OutWidth,NStates} end
 
@@ -27,5 +27,3 @@ end
   @test CANeuron{4,2}(ca, 3)([1, 0, 0, 0]) == (ca ∘ ca ∘ ca)([1, 0, 0, 0])
   @inferred CANeuron{4,2}(ca, 3)([1, 0, 0, 0])
 end
-
-_left(a, _) = a
