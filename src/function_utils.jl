@@ -1,24 +1,22 @@
 using Transducers, TestItems, Test, MacroTools
 
+using Lazy: iterated
+
 _stable_typeof(x) = typeof(x)
 _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
-# foldl takes a fn (acc, x). (fn ∘ _left) is (acc,_) -> fn(acc)
-# this is basically just fn composed with itself `times` times (fn ∘ fn ∘ ... )
 """
     repeated(fn, times)
 
 Compose `fn` with itself `times` times
 """
-function repeated(fn, times)
-  if times ≥ 20
-    repeated_fold(fn, times)
-  else
-    repeated_compose(fn, times)
-  end
+@inline function repeated(fn, times)::Function
+  # foldl takes a fn (acc, x). (fn ∘ _left) is (acc,_) -> fn(acc)
+  # this is basically just fn composed with itself `times` times (fn ∘ fn ∘ ... )
+  (input) -> foldl((fn ∘ _left), 1:times; init=input)
 end
 
-repeated_compose(fn, times)::Function = ∘(fill(fn, times)...)
+repeated_compose(fn, times) = ∘(fill(fn, times)...)
 
 repeated_fold(fn, times) = (input) -> foldl((fn ∘ _left), 1:times; init=input)
 
@@ -163,6 +161,9 @@ julia> fc = @© fn(1, 2; kw1 = 13);
 
 julia> fc(3, 40; kw2 = 1000) # same as fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000)
 299//500
+
+julia> fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000) == fc(3, 40; kw2 = 1000)
+true
 ```
 """
 macro ©(ex)
@@ -184,6 +185,9 @@ julia> fc = @£ fn(3, 40; kw2 = 1000);
 
 julia> fc(1, 2; kw1 = 13) # same as fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000)
 299//500
+
+julia> fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000) == fc(1, 2; kw1 = 13)
+true
 ```
 
 """
