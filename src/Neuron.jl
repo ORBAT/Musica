@@ -1,6 +1,6 @@
 using TestItems, Test
 
-abstract type Neuron{InWidth,OutWidth,NStates} end
+abstract type Neuron{InWidth,OutWidth,NStates} <: Function end
 
 struct CANeuron{Width,NStates} <: Neuron{Width,Width,NStates}
   ca::DiscreteCA
