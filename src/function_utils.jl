@@ -115,13 +115,13 @@ end
 
 const CurryTailTup = CurryTail{T} where {T<:Tuple}
 
-@inline (f::CurryTail)(y; kw...) = f.f(f.x, y; _merge_nonempty(f.kw, kw)...)
-@inline (f::CurryTail)(ys...; kw...) = f.f(f.x, ys...; _merge_nonempty(f.kw, kw)...)
+@inline (f::CurryTail)(y; kw...) = f.f(y, f.x; _merge_nonempty(f.kw, kw)...)
+@inline (f::CurryTail)(ys...; kw...) = f.f(ys..., f.x; _merge_nonempty(f.kw, kw)...)
 
 # methods below are used when the initial value in f.x is a Tuple
 
-@inline (f::CurryTailTup)(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
-@inline (f::CurryTailTup)(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
+@inline (f::CurryTailTup)(y; kw...) = f.f(y, f.x...; _merge_nonempty(f.kw, kw)...)
+@inline (f::CurryTailTup)(ys...; kw...) = f.f(ys..., f.x...; _merge_nonempty(f.kw, kw)...)
 
 const _EmptyKW = Base.Pairs{Symbol,Union{},Tuple{},NamedTuple{(),Tuple{}}}
 const _emptyKW = pairs((;))
@@ -133,15 +133,15 @@ _merge_nonempty(::_EmptyKW, d::AbstractDict) = d
 _merge_nonempty(::_EmptyKW, ::_EmptyKW) = _emptyKW
 
 """
-    @£ fn(a)
-    @£ fn(a, b)
-    @£ fn(a; kw=1)
+    @© fn(a)
+    @© fn(a, b)
+    @© fn(a; kw=1)
 
 Convenience macro for constructing a [`CurryHead`](@ref). The argument must be a function call with at least one argument, 
 and zero or more keyword arguments.
 
 ```jldoctest
-julia> plus1 = @£ +(1);
+julia> a = 1; plus1 = @© +(a);
 
 julia> plus1(2)
 3
@@ -149,7 +149,7 @@ julia> plus1(2)
 julia> plus1(2, 3)
 6
 
-julia> digger = @£ digits(Int; base=2);
+julia> b = 2; digger = @© digits(Int; base=b);
 
 julia> show(digger(20; pad=8))
 [0, 0, 1, 0, 1, 0, 0, 0]
@@ -159,16 +159,42 @@ julia> show(digger(20))
 
 julia> fn = (a,b,c,d;kw1,kw2) -> (a+b+c+d)kw1 // kw2;
 
-julia> fc = @£ fn(1, 2; kw1 = 13);
+julia> fc = @© fn(1, 2; kw1 = 13);
 
-julia> fc(3,40;kw2=1000)
+julia> fc(3, 40; kw2 = 1000) # same as fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000)
 299//500
 ```
 """
+macro ©(ex)
+  _curried(ex, :CurryHead)
+end
+
+"""
+@£ fn(a)
+@£ fn(a, b)
+@£ fn(a; kw=1)
+
+Convenience macro for constructing a [`CurryTail`](@ref). The argument must be a function call with at least one argument, 
+and zero or more keyword arguments.
+
+```jldoctest
+julia> fn = (a,b,c,d;kw1,kw2) -> (a+b+c+d)kw1 // kw2;
+
+julia> fc = @£ fn(3, 40; kw2 = 1000);
+
+julia> fc(1, 2; kw1 = 13) # same as fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000)
+299//500
+```
+
+"""
 macro £(ex)
-  @capture(ex, fn_(args__; kws__) | fn_(args__)) || error("Not used on a function call? Syntax: @£ f(a,b;c=1)")
+  _curried(ex, :CurryTail)
+end
+
+function _curried(ex, Constructor)
+  @capture(ex, fn_(args__; kws__) | fn_(args__)) || error("Not used on a function call? Syntax: @© f(a, b; c = 1)")
   if length(args) == 0
-    error("Function call had no arguments. Syntax: @£ f(a,b;c=1)")
+    error("Function call had no arguments. Syntax: @© f(a, b; c = 1)")
   end
 
   @debug fn args kws
@@ -176,11 +202,12 @@ macro £(ex)
   fn = esc(fn)
   args = map(esc, args)
   isnothing(kws) ? kws = Any[] : kws = map(esc, kws)
+
   @debug "after esc" fn args kws
 
   quote
-    CurryHead($fn, $(args...); $(kws...))
+    $Constructor($fn, $(args...); $(kws...))
   end
 end
 
-export CurryHead, @£
+export CurryHead, @©, @£
