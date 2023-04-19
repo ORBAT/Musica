@@ -1,8 +1,5 @@
 using Transducers, StaticArrays, TestItems, Test
 
-
-###################### TODO
-
 """
     Row{NStates,Len,T,C<:AbstractArray}
 
@@ -19,9 +16,9 @@ struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
   end
 end
 
-@inline Row{NStates,Len,T}(coll) where {NStates,Len,T} = Row{NStates,Len,T,typeof(coll)}(coll)
-@inline Row{NStates,Len}(coll) where {NStates,Len} = Row{NStates,Len,Base.eltype(coll)}(coll)
-@inline Row{NStates}(coll::SV) where {NStates,Len,T,SV<:StaticVector{Len,T}} = Row{NStates,Len,T,SV}(coll)
+@inline Row{NS,L,T}(coll) where {NS,L,T} = Row{NS,L,T,typeof(coll)}(coll)
+@inline Row{NS,L}(coll) where {NS,L} = Row{NS,L,Base.eltype(coll)}(coll)
+@inline Row{NS}(coll::SV) where {NS,L,T,SV<:Union{StaticVector{L,T}, SizedVector{L, T}}} = Row{NS,L,T,SV}(coll)
 
 @inline Base.IndexStyle(::Type{Row{NS,L,T,C}}) where {NS,L,T,C} = Base.IndexStyle(C)
 
@@ -39,11 +36,13 @@ end
 # conversions from one Row collection type to another (converts collection type from C to NC)
 @inline Base.convert(::Type{Row{NS,L,T,NC}}, r::R) where {NS,L,T,NC,C,R<:Row{NS,L,T,C}} = Row{NS,L,T,NC}(convert(NC, r.coll))
 # conversions from any AbstractArray to a Row
-@inline  Base.convert(::Type{Row{NS,L,T,C}}, c::C) where {NS,L,T,C<:AbstractArray} = Row{NS,L,T,C}(c)
-@inline  Base.convert(::Type{Row{NS,L,T}}, c::C) where {NS,L,T,C<:AbstractArray} = Row{NS,L,T,C}(c)
+@inline Base.convert(::Type{Row{NS,L,T,C}}, c::C) where {NS,L,T,C<:AbstractArray} = Row{NS,L,T,C}(c)
+@inline Base.convert(::Type{Row{NS,L,T}}, c::C) where {NS,L,T,C<:AbstractArray} = Row{NS,L,T,C}(c)
 
 @forward Row.coll (Base.size, Base.getindex, Base.setindex!, Base.firstindex, Base.lastindex, Base.iterate,
   Base.length, Base.axes, eltype, Base.IteratorSize, Base.IteratorEltype)
+
+@inline count_ones(r::Row{2})::Integer = sum(filter(==(1), r))
 
 struct DiscreteCA{NStates,Radius,RuleLen}
   rule::Int
@@ -52,7 +51,7 @@ struct DiscreteCA{NStates,Radius,RuleLen}
   function DiscreteCA{NStates,Radius,RuleLen}(rule::Int) where {NStates,Radius,RuleLen}
     @assert 0 ≤ rule < (NStates^RuleLen) "rule number for $(NStates) states must be ≥ 0 and < $(NStates^RuleLen), was $(rule)"
     @assert RuleLen == NStates^(2 * Radius + 1) "RuleLen must be NStates^(2 * Radius + 1)"
-    new(rule, rule_to_rule_lookup(rule, Val{NStates}(), Val{Radius}()))
+    new(rule, rule_to_rule_lookup(rule, NStates, Radius))
   end
 end
 
@@ -61,7 +60,7 @@ function DiscreteCA{NStates,Radius}(rule::Int) where {NStates,Radius}
 end
 
 function DiscreteCA{NStates}(rule::Int) where {NStates}
-  DiscreteCA{NStates,1,NStates^(2 * 1 + 1)}(rule)
+  DiscreteCA{NStates,1}(rule)
 end
 
 @testitem "CA initialization" begin
@@ -79,10 +78,10 @@ end
 function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,L,State<:Row{NS,L}}
   new_state = similar(state)
   # state wraps around at the ends
-  wrapped_state = wrapped_state_eduction(state, RD)
-  # run wrapped_state through xf, fold it into new_state 
+  ws = wrap_state(state, RD)
+  # run wrap_state through xf, fold it into new_state 
   xf = transducer(dca)
-  _collect_into!(xf, wrapped_state, new_state)
+  _collect_into!(xf, ws, new_state)
 end
 
 "Feeds `foldable` into `xf` and collects the result into `init_state`. Mutates `init_state`"
@@ -94,11 +93,14 @@ end
     acc
   end
 
-"""Make `state` wrap around at the ends by prepending the `radius` last elements and appending first elements.
+"""
+    wrap_state(state, radius)
+
+Make `state` wrap around at the ends by prepending the `radius` last elements and appending first elements.
 
 Returns an [eduction](https://juliafolds.github.io/Transducers.jl/stable/reference/manual/#Transducers.eduction).
 """
-@inline wrapped_state_eduction(state, radius) = (@view(state[end-radius+1:end]), state, @view(state[1:radius])) |> Cat()
+@inline wrap_state(state, radius) = (@view(state[end-radius+1:end]), state, @view(state[1:radius])) |> Cat()
 
 @inline neighborhood_size(::Type{DiscreteCA{NS,RD,RuL}}) where {NS,RD,RuL} = RD * 2 + 1
 
@@ -137,7 +139,7 @@ julia> Musica.undigits(Musica.rule_to_rule_lookup(22, 3), 3)
 @inline undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=0)
 
 """
-    rule_to_rule_lookup(rule::Int, nstates::Int = 2, radius::Int = 1)
+    Musica.rule_to_rule_lookup(rule::Int, nstates::Int = 2, radius::Int = 1)
 
 Return a little-endian vector for the transition rule padded to the max rule length. 
 Eg. for radius=1 nstates=2, index 0 is the result for 000, index 1 is for 001 etc.
@@ -153,12 +155,8 @@ julia> show(x)
 See also [`undigits`](@ref)
 """
 @inline function rule_to_rule_lookup(rule::Int, nstates::Int=2, radius::Int=1)
-  rule_to_rule_lookup(rule, Val(nstates), Val(radius))
-end
-
-@inline function rule_to_rule_lookup(rule::Int, ::Val{NStates}, ::Val{Radius}) where {NStates,Radius}
-  RuleLen = NStates^(2 * Radius + 1)
-  SVector{RuleLen,Int}(digits(Int, rule, base=NStates, pad=RuleLen))
+  RuleLen = nstates^(2 * radius + 1)
+  SVector{RuleLen,Int}(digits(Int, rule; base=nstates, pad=RuleLen))
 end
 
 @testitem "Rule number to rule lookup array" begin
