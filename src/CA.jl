@@ -10,15 +10,19 @@ Is a subtype of `AbstractVector` and should implement the whole interface for it
 struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
   coll::C
 
+  function Row{NStates,Len,T,C}(c::C) where {NStates,Len,T,C<:Union{StaticVector{Len,T}, SizedVector{Len,T}}}
+    new(c)
+  end
+
   function Row{NStates,Len,T,C}(c::C) where {NStates,Len,T,C<:AbstractArray}
     @assert length(c) == Len "Tried to construct a Row with Len type parameter $Len, but with a collection of length $(length(c))"
     new(c)
   end
 end
 
-@inline Row{NS,L,T}(coll) where {NS,L,T} = Row{NS,L,T,typeof(coll)}(coll)
-@inline Row{NS,L}(coll) where {NS,L} = Row{NS,L,Base.eltype(coll)}(coll)
-@inline Row{NS}(coll::SV) where {NS,L,T,SV<:Union{StaticVector{L,T}, SizedVector{L, T}}} = Row{NS,L,T,SV}(coll)
+Row{NS,L,T}(coll) where {NS,L,T} = Row{NS,L,T,typeof(coll)}(coll)
+Row{NS,L}(coll) where {NS,L} = Row{NS,L,Base.eltype(coll)}(coll)
+Row{NS}(coll::SV) where {NS,L,T,SV<:Union{StaticVector{L,T},SizedVector{L,T}}} = Row{NS,L,T,SV}(coll)
 
 @inline Base.IndexStyle(::Type{Row{NS,L,T,C}}) where {NS,L,T,C} = Base.IndexStyle(C)
 
@@ -76,42 +80,44 @@ end
 **HOX HOX** kokeillu vähän kaikkea mutta tän return type jostain syystä vaan tahtoo olla `any` jos statea ei tyypitä
 """
 function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,L,State<:Row{NS,L}}
-  new_state = similar(state)
   # state wraps around at the ends
-  ws = wrap_state(state, RD)
-  # run wrap_state through xf, fold it into new_state 
-  xf = transducer(dca)
-  _collect_into!(xf, ws, new_state)
+  ws = _wrap_state(state, RD)
+  # run ws through xf, fold it into a container that's similar to `state` 
+  xf = _transducer(dca)
+  _collect_into!(xf, ws, similar(state))
 end
 
 "Feeds `foldable` into `xf` and collects the result into `init_state`. Mutates `init_state`"
 _collect_into!(xf, foldable, init_state) =
   foldl(xf |> Enumerate(), foldable; init=init_state) do acc, (idx, a)
-    @inline
     # folds xf into init_state
-    acc[idx] = a
+    @inbounds acc[idx] = a
     acc
   end
 
 """
-    wrap_state(state, radius)
+    _wrap_state(state, radius)
 
 Make `state` wrap around at the ends by prepending the `radius` last elements and appending first elements.
 
 Returns an [eduction](https://juliafolds.github.io/Transducers.jl/stable/reference/manual/#Transducers.eduction).
 """
-@inline wrap_state(state, radius) = (@view(state[end-radius+1:end]), state, @view(state[1:radius])) |> Cat()
+_wrap_state(state, radius) = (@inbounds(@view(state[end-radius+1:end])), state, @inbounds(@view(state[1:radius]))) |> Cat()
 
-@inline neighborhood_size(::Type{DiscreteCA{NS,RD,RuL}}) where {NS,RD,RuL} = RD * 2 + 1
+neighborhood_size(::Type{DiscreteCA{NS,RD,RuL}}) where {NS,RD,RuL} = RD * 2 + 1
 
-"""Returns a transducer that applies the CA's rule.
+"""Return a transducer that applies the CA's rule.
 
 - slices into windows (neighborhoods) of length neighborhood_size, 1 step at a time
 - turns each neighborhood x into a number, uses that to index into the rule_lookup to get the result
 """
-@inline function transducer(dca::T) where {NS,RD,RuL,T<:DiscreteCA{NS,RD,RuL}}
+function _transducer(dca::T) where {T<:DiscreteCA}
   Consecutive(neighborhood_size(T), 1) |>
-  Map(x -> @inline dca.rule_lookup[undigits(x, NS)+1])
+  Map(@© _lookup_rule(dca))
+end
+
+function _lookup_rule(dca::DiscreteCA{NS}, x) where {NS}
+  dca.rule_lookup[undigits(x, NS)+1]
 end
 
 @testitem "evolution" begin
@@ -136,13 +142,13 @@ julia> Musica.undigits(Musica.rule_to_rule_lookup(22, 3), 3)
 22
 ```
 """
-@inline undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=0)
+undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=0)
 
 """
     Musica.rule_to_rule_lookup(rule::Int, nstates::Int = 2, radius::Int = 1)
 
 Return a little-endian vector for the transition rule padded to the max rule length. 
-Eg. for radius=1 nstates=2, index 0 is the result for 000, index 1 is for 001 etc.
+Eg. for radius=1 nstates=2, index 1 is the result for 000, index 1 is for 001 etc.
 
 ```jldoctest
 julia> x = Musica.rule_to_rule_lookup(30);
@@ -154,11 +160,17 @@ julia> show(x)
 
 See also [`undigits`](@ref)
 """
-@inline function rule_to_rule_lookup(rule::Int, nstates::Int=2, radius::Int=1)
+function rule_to_rule_lookup(rule::Int, nstates::Int=2, radius::Int=1)
   RuleLen = nstates^(2 * radius + 1)
   SVector{RuleLen,Int}(digits(Int, rule; base=nstates, pad=RuleLen))
 end
 
 @testitem "Rule number to rule lookup array" begin
   @test Musica.rule_to_rule_lookup(22, 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
+end
+
+function parser(::Type{DiscreteCA{2}})
+  function p(bv)::Tuple{BitVector, DiscreteCA{2}}
+    (bv |> Drop(8) |> collect, DiscreteCA{2}(undigits(bv |> Take(8) |> collect)))
+  end
 end
