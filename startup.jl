@@ -1,4 +1,4 @@
-using TestItems, Test, Transducers, StaticArrays, Evolutionary, Revise, BenchmarkTools
+using TestItems, Test, Transducers, StaticArrays, Revise, BenchmarkTools
 
 BenchmarkTools.DEFAULT_PARAMETERS.samples = 30000
 
