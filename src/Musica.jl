@@ -6,7 +6,7 @@ include("CA.jl")
 export DiscreteCA, Row
 
 include("Neuron.jl")
-export CANeuron
+export CANeuron, CANeuronStack
 
 end
 

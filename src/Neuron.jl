@@ -58,4 +58,68 @@ end
   @test p(BitVector(gen_bits)) == (Bool[], CANeuron{2,8}(DiscreteCA{2}(0), n_generations))
   @test p(extra_bits) == (BitVector(ca_bits), CANeuron{2,8}(DiscreteCA{2}(110), n_generations))
 end
+
+const CANeuronStack{S,N,W} = SVector{S,CANeuron{N,W}} where {S,N,W}
+
+function (cas::CANeuronStack{S,N,W})(state::State)::State where {S,N,W,State<:Row{N,W}}
+  foldl(cas;init=state) do acc, can
+    can(acc)
+  end
+end
+
+
+@testitem "CANeuronStack" begin
+  using StaticArrays
+  function new_state(::Type{Val{L}}) where {L}
+    let bla = zeros(Int, L)
+      bla[1] = 1
+      Row{2}(SizedVector{L}(bla))
+    end
+  end
+
+  rule1 = 110
+  rule2 = 30
+  n_generations1 = 40
+  n_generations2 = 20
+  test_can1 = CANeuron{2,32}(DiscreteCA{2}(110), n_generations1)
+  test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_generations2)
+  cas = CANeuronStack{2,2,32}(test_can1, test_can2)
+  state = new_state(Val{32})
+  @test cas(state) == test_can1(state) |> test_can2
+end
+
+
+function parser_bits_required(::Type{<:CANeuronStack{S,2}}) where {S}
+  S * parser_bits_required(CANeuron{2})
+end
+
+function parser(::Type{<:CANeuronStack{S,2,W}}) where {S,W}
+  function p(bv::BitVector)::Tuple{BitVector,CANeuronStack{S,2,W}}
+    out = Vector{CANeuron{2,W}}(undef, S)
+    can_parser = Musica.parser(CANeuron{2,W})
+    for idx in 1:S
+      bv, can = can_parser(bv)
+      out[idx] = can
+    end
+    (bv, CANeuronStack{S,2,W}(out))
+  end
+end
+
+@testitem "CANeuronStack parsing" begin
+  rule1 = 110
+  rule2 = 30
+  n_generations1 = 40
+  n_generations2 = 20
+  gen_bits1 = digits(n_generations1; base=2, pad=6)
+  gen_bits2 = digits(n_generations2; base=2, pad=6)
+  ca1_bits = digits(rule1; base=2, pad=8)
+  ca2_bits = digits(rule2; base=2, pad=8)
+  full_bits1 = BitVector(vcat(gen_bits1, ca1_bits))
+  full_bits2 = BitVector(vcat(gen_bits2, ca2_bits))
+
+  test_can1 = CANeuron{2,32}(DiscreteCA{2}(110), n_generations1)
+  test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_generations2)
+
+  p = Musica.parser(CANeuronStack{2,2,32})
+  @test p(vcat(full_bits1, full_bits2)) == (Bool[], CANeuronStack{2}(test_can1, test_can2))
 end
