@@ -10,7 +10,7 @@ _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
 Compose `fn` with itself `times` times
 """
-@inline function repeated(fn, times)::Function
+function repeated(fn, times)::Function
   # foldl takes a fn (acc, x). (fn ∘ _left) is (acc,_) -> fn(acc)
   # this is basically just fn composed with itself `times` times (fn ∘ fn ∘ ... )
   (input) -> foldl((fn ∘ _left), 1:times; init=input)
@@ -125,10 +125,10 @@ const _EmptyKW = Base.Pairs{Symbol,Union{},Tuple{},NamedTuple{(),Tuple{}}}
 const _emptyKW = pairs((;))
 
 "Only call `merge` if both parameters are non-empty, otherwise just return the non-empty param"
-_merge_nonempty(d::AbstractDict, other::AbstractDict) = merge(d, other)
-_merge_nonempty(d::AbstractDict, ::_EmptyKW) = d
-_merge_nonempty(::_EmptyKW, d::AbstractDict) = d
-_merge_nonempty(::_EmptyKW, ::_EmptyKW) = _emptyKW
+@inline _merge_nonempty(d::AbstractDict, other::AbstractDict) = merge(d, other)
+@inline _merge_nonempty(d::AbstractDict, ::_EmptyKW) = d
+@inline _merge_nonempty(::_EmptyKW, d::AbstractDict) = d
+@inline _merge_nonempty(::_EmptyKW, ::_EmptyKW) = _emptyKW
 
 """
     @© fn(a)
