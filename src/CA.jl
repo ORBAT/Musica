@@ -173,6 +173,8 @@ function parser(::Type{DiscreteCA{2}})
   end
 end
 
+parser_bits_required(::Type{<:DiscreteCA{2}}) = 8
+
 """
     Musica.num_as_ones(n, Val{N})
 
