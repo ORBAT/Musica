@@ -10,7 +10,7 @@ Is a subtype of `AbstractVector` and should implement the whole interface for it
 struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
   coll::C
 
-  function Row{NStates,Len,T,C}(c::C) where {NStates,Len,T,C<:Union{StaticVector{Len,T}, SizedVector{Len,T}}}
+  function Row{NStates,Len,T,C}(c::C) where {NStates,Len,T,C<:Union{StaticVector{Len,T},SizedVector{Len,T}}}
     new(c)
   end
 
@@ -45,8 +45,6 @@ end
 
 @forward Row.coll (Base.size, Base.getindex, Base.setindex!, Base.firstindex, Base.lastindex, Base.iterate,
   Base.length, Base.axes, eltype, Base.IteratorSize, Base.IteratorEltype)
-
-@inline count_ones(r::Row{2})::Integer = sum(filter(==(1), r))
 
 struct DiscreteCA{NStates,Radius,RuleLen}
   rule::Int
@@ -170,7 +168,37 @@ end
 end
 
 function parser(::Type{DiscreteCA{2}})
-  function p(bv)::Tuple{BitVector, DiscreteCA{2}}
+  function p(bv)::Tuple{BitVector,DiscreteCA{2}}
     (bv |> Drop(8) |> collect, DiscreteCA{2}(undigits(bv |> Take(8) |> collect)))
   end
+end
+
+"""
+    Musica.num_as_ones(n, Val{N})
+
+Return a `Row{2,N}` that contains `n` 1's. Little-endian, padded to length `N`
+
+```jldoctest
+julia> Musica.num_as_ones(6, Val{8})
+8-element Row{2, 8, Int64, Vector{Int64}}:
+ 1
+ 1
+ 1
+ 1
+ 1
+ 1
+ 0
+ 0
+```
+"""
+function num_as_ones(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
+  @assert 0 ≤ n < 2^L "n must be positive and smaller than 2^L ($(2^L)), was $n"
+  Row{2,L}(digits(2^n - 1;base=2, pad=L))
+end
+
+count_ones(r::Row{2})::Int = sum(filter(==(1), r))
+
+@testitem "num_as_ones" begin
+  @test_throws AssertionError Musica.num_as_ones(-1, Val{8})
+  @test_throws AssertionError Musica.num_as_ones(256, Val{8})
 end
