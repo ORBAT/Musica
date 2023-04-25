@@ -3,30 +3,29 @@ using TestItems, Test, Transducers, StaticArrays, Revise, BenchmarkTools
 BenchmarkTools.DEFAULT_PARAMETERS.samples = 30000
 
 includet("src/Musica.jl")
-##includet("src/CA.jl")
 
 using .Musica
 
-function new_state(::Type{Val{L}})::SizedVector{L} where {L}
+function new_state(::Type{Val{L}}) where {L}
   state = let bla = zeros(Int, L)
     bla[1] = 1
-    SizedVector{L}(bla)
+    Row{2}(SizedVector{L}(bla))
   end
 end
 
-function new_state(::Val{L})::SizedVector{L} where {L}
+function new_state(::Val{L}) where {L}
   new_state(Val{L})
 end
 
 new_state(v::Integer) = new_state(Val(v))
 
-test_ca = DiscreteCA{2,1}(110)
-test_state=Row{2}(new_state(Val{32}))
+test_state=new_state(Val{32})
 n_generations=40
-
-
 
 test_ca = DiscreteCA{2}(110)
 test_ca2 = DiscreteCA{2,1}(54)
 
-# r=Musica.Row{2}(@SVector [1,2,3,4])
+test_can = CANeuron{2,32}(test_ca, n_generations)
+test_can2 = CANeuron{2,32}(test_ca2, Int(floor(n_generations/2)))
+
+test_stack = CANeuronStack{2,2,32}(test_can,test_can2)
