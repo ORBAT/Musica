@@ -1,4 +1,4 @@
-using TestItems, Test, Transducers, StaticArrays, Revise, BenchmarkTools
+using TestItems, Test, Transducers, StaticArrays, Revise, BenchmarkTools, Metaheuristics, StatsBase
 
 BenchmarkTools.DEFAULT_PARAMETERS.samples = 30000
 
@@ -7,7 +7,7 @@ includet("src/Musica.jl")
 using .Musica
 
 function new_state(::Type{Val{L}}) where {L}
-  state = let bla = zeros(Int, L)
+  let bla = zeros(Int, L)
     bla[1] = 1
     Row{2}(SizedVector{L}(bla))
   end
