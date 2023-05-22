@@ -1,6 +1,6 @@
 using TestItems, Test, Transducers, StaticArrays, Revise, BenchmarkTools, Metaheuristics, StatsBase
 
-BenchmarkTools.DEFAULT_PARAMETERS.samples = 30000
+# BenchmarkTools.DEFAULT_PARAMETERS.samples = 30000
 
 includet("src/Musica.jl")
 
