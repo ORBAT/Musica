@@ -16,6 +16,17 @@ struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
 
 end
 
+## 
+
+function Base.show(io::IO, can::CANeuron{NS,Width}) where {NS,Width}
+  print(io, "CANeuron($(can.ca), width=$Width, gens=$(can.generations))")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", can::CANeuron{NS,Width}) where {NS,Width}
+  print(io, "CANeuron($(can.ca), width=$Width, gens=$(can.generations))")
+end
+
+
 function (can::CANeuron{N,W})(state::State)::State where {N,W,State<:Row{N,W}}
   can.repeated_ca_fn(state)
 end

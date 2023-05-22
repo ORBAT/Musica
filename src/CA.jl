@@ -1,4 +1,4 @@
-using Transducers, StaticArrays, TestItems, Test
+using Transducers, StaticArrays, TestItems, Test, Printf
 
 """
     Row{NStates,Len,T,C<:AbstractArray}
@@ -62,7 +62,7 @@ struct DiscreteCA{NStates,Radius,RuleLen}
 end
 
 function Base.show(io::IO, ca::DiscreteCA{2, 1})
-  print(io, "DiscreteCA(ECA $(ca.rule))")
+  @printf(io, "DiscreteCA(ECA %3i)", ca.rule)
 end
 
 function DiscreteCA{NStates,Radius}(rule::Int) where {NStates,Radius}
