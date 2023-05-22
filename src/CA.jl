@@ -57,6 +57,10 @@ struct DiscreteCA{NStates,Radius,RuleLen}
   end
 end
 
+function Base.show(io::IO, ca::DiscreteCA{2, 1})
+  print(io, "DiscreteCA(ECA $(ca.rule))")
+end
+
 function DiscreteCA{NStates,Radius}(rule::Int) where {NStates,Radius}
   DiscreteCA{NStates,Radius,NStates^(2 * Radius + 1)}(rule)
 end
