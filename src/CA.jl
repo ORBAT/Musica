@@ -40,8 +40,12 @@ end
 # conversions from one Row collection type to another (converts collection type from C to NC)
 @inline Base.convert(::Type{Row{NS,L,T,NC}}, r::R) where {NS,L,T,NC,C,R<:Row{NS,L,T,C}} = Row{NS,L,T,NC}(convert(NC, r.coll))
 # conversions from any AbstractArray to a Row
-@inline Base.convert(::Type{Row{NS,L,T,C}}, c::C) where {NS,L,T,C<:AbstractArray} = Row{NS,L,T,C}(c)
-@inline Base.convert(::Type{Row{NS,L,T}}, c::C) where {NS,L,T,C<:AbstractArray} = Row{NS,L,T,C}(c)
+# @inline Base.convert(::Type{Row{NS,L,T,C}}, c::C) where {NS,L,T,C<:AbstractArray} = Row{NS,L,T,C}(c)
+# @inline Base.convert(::Type{Row{NS,L,T}}, c::C) where {NS,L,T,C<:AbstractArray} = Row{NS,L,T,C}(c)
+
+# @testitem "Row conversions" begin
+#   @test convert(Row{2,1,Int64,})
+# end
 
 @forward Row.coll (Base.size, Base.getindex, Base.setindex!, Base.firstindex, Base.lastindex, Base.iterate,
   Base.length, Base.axes, eltype, Base.IteratorSize, Base.IteratorEltype)
