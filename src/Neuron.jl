@@ -62,8 +62,30 @@ end
 
 const CANeuronStack{S,N,W} = SVector{S,CANeuron{N,W}} where {S,N,W}
 
+function Base.show(io::IO, ::CANeuronStack{Size,NStates,Width}) where {Size,NStates,Width}
+  print(io, "CANeuronStack(size=$Size)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", cas::CANeuronStack{Size,NStates,Width}) where {Size,NStates,Width}
+  print(io, "CANeuronStack(size=$Size) [")
+  if !isempty(cas)
+    first = true
+    foreach(cas) do can
+      if first
+        print(io, "\n   ")
+        first = false
+      else
+        print(io, "\n  ,")
+      end
+
+      show(io, can)
+    end
+    println(io)
+  end
+  println(io, "]")
+end
+
 function (cas::CANeuronStack{S,N,W})(state::State)::State where {S,N,W,State<:Row{N,W}}
-  foldl(cas;init=state) do acc, can
     can(acc)
   end
 end
