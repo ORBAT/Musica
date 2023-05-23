@@ -93,10 +93,10 @@ function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,L,St
   _collect_into!(xf, ws, similar(state))
 end
 
-"Feeds `foldable` into `xf` and collects the result into `init_state`. Mutates `init_state`"
-_collect_into!(xf, foldable, init_state) =
-  foldl(xf |> Enumerate(), foldable; init=init_state) do acc, (idx, a)
-    # folds xf into init_state
+"Feeds `foldable` into `xf` and collects the result into `collection`. Mutates `collection`"
+_collect_into!(xf, foldable, collection) =
+  foldl(xf |> Enumerate(), foldable; init=collection) do acc, (idx, a)
+    # folds xf into collection
     @inbounds acc[idx] = a
     acc
   end
