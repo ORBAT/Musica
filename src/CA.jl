@@ -61,7 +61,7 @@ struct DiscreteCA{NStates,Radius,RuleLen}
   end
 end
 
-function Base.show(io::IO, ca::DiscreteCA{2, 1})
+function Base.show(io::IO, ca::DiscreteCA{2,1})
   @printf(io, "DiscreteCA(ECA %3i)", ca.rule)
 end
 
@@ -175,13 +175,13 @@ end
   @test Musica.rule_to_rule_lookup(22, 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
 end
 
-function parser(::Type{DiscreteCA{2}};kw...)
-  function p(bv)::Tuple{BitVector,DiscreteCA{2}}
-    (bv |> Drop(8) |> collect, DiscreteCA{2}(undigits(bv |> Take(8) |> collect)))
+function parser(::Type{DiscreteCA{2}}; kw...)
+  function p(bits::T)::Tuple{BitVector,DiscreteCA{2}} where {T<:AbstractArray}
+    (bits |> Drop(8) |> collect, DiscreteCA{2}(undigits(bits |> Take(8) |> collect)))
   end
 end
 
-parser_bits_required(::Type{<:DiscreteCA{2}};kw...) = 8
+parser_bits_required(::Type{<:DiscreteCA{2}}; kw...) = 8
 
 """
     Musica.num_as_ones(n, Val{N})
@@ -203,11 +203,11 @@ julia> Musica.num_as_ones(6, Val{8})
 """
 function num_as_ones(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
   @assert 0 ≤ n < BigInt(2)^L "n must be positive and smaller than 2^L ($(2^L)), was $n"
-  Row{2,L}(digits(BigInt(2)^n - 1;base=2, pad=L))
+  Row{2,L}(digits(BigInt(2)^n - 1; base=2, pad=L))
 end
 
 function num_as_row(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
-  Row{2,L}(digits(n;base=2,pad=L))
+  Row{2,L}(digits(n; base=2, pad=L))
 end
 
 count_ones(r::Row{2})::Int = sum(filter(==(1), r))

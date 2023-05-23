@@ -31,8 +31,8 @@ function (can::CANeuron{N,W})(state::State)::State where {N,W,State<:Row{N,W}}
   can.repeated_ca_fn(state)
 end
 
-function parse_n_bits(bv::BitVector, n)::Tuple{BitVector,Int}
-  (bv |> Drop(n) |> collect, undigits(bv |> Take(n) |> collect))
+function parse_n_bits(bits::T, n)::Tuple{BitVector,Int} where {T<:AbstractArray}
+  (bits |> Drop(n) |> collect, undigits(bits |> Take(n) |> collect))
 end
 
 const default_bits_per_generation = 5
@@ -40,8 +40,8 @@ const default_bits_per_generation = 5
 parser_bits_required(::Type{<:CANeuron{2}}; bits_per_gen::Type{Val{_bits_per_generation}}=Val{default_bits_per_generation}, restkw...) where {_bits_per_generation} = _bits_per_generation + parser_bits_required(DiscreteCA{2}; restkw...)
 
 function parser(::Type{<:CANeuron{2,W}}; bits_per_gen::Type{Val{_bits_per_generation}}=Val{default_bits_per_generation}) where {W,_bits_per_generation}
-  function p(bv::BitVector)::Tuple{BitVector,CANeuron{2,W}}
-    bitsleft, generations = parse_n_bits(bv, _bits_per_generation)
+  function p(bits::T)::Tuple{BitVector,CANeuron{2,W}} where {T<:AbstractArray}
+    bitsleft, generations = parse_n_bits(bits, _bits_per_generation)
     bitsleft, ca = parser(DiscreteCA{2})(bitsleft)
     (bitsleft, CANeuron{2,W}(ca, generations))
   end
@@ -129,14 +129,14 @@ function parser_bits_required(::Type{<:CANeuronStack{S,2}}; kw...) where {S}
 end
 
 function parser(::Type{<:CANeuronStack{S,2,W}}; kw...) where {S,W}
-  function p(bv::BitVector)::Tuple{BitVector,CANeuronStack{S,2,W}}
+  function p(bits::T)::Tuple{BitVector,CANeuronStack{S,2,W}} where {T<:AbstractArray}
     out = Vector{CANeuron{2,W}}(undef, S)
     can_parser = Musica.parser(CANeuron{2,W}; kw...)
     for idx in 1:S
-      bv, can = can_parser(bv)
+      bits, can = can_parser(bits)
       out[idx] = can
     end
-    (bv, CANeuronStack{S,2,W}(out))
+    (bits, CANeuronStack{S,2,W}(out))
   end
 end
 
