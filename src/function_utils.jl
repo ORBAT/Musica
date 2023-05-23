@@ -68,50 +68,48 @@ julia> show(digger(20))
 
 julia> fn = (a, b, c, d; kw1, kw2) -> (a + b + c + d)kw1 // kw2;
 
-julia> fc = CurryHead(fn, 1, 2; kw1 = 13);
+julia> curried = CurryHead(fn, 1, 2; kw1 = 13);
 
-julia> fc(3, 40; kw2 = 1000)
+julia> curried(3, 40; kw2 = 1000)
 299//500
 ```
 """
-struct CurryHead{T,F,KW} <: Function
+struct CurryHead{InitArg,F<:Function,KW} <: Function
   f::F
-  x::T
+  x::InitArg
   kw::KW
 
   CurryHead(f::F, x; kwargs...) where {F} = new{_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
-  CurryHead(f::Type{F}, x; kwargs...) where {F} = new{_stable_typeof(x),Type{F},_stable_typeof(kwargs)}(f, x, kwargs)
-
   CurryHead(f::F, x...; kwargs...) where {F} = new{_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
-  CurryHead(f::Type{F}, x...; kwargs...) where {F} = new{_stable_typeof(x),Type{F},_stable_typeof(kwargs)}(f, x, kwargs)
 end
 
-const CurryHeadTup = CurryHead{T} where {T<:Tuple}
+const CurryHeadTup = CurryHead{InitArg} where {InitArg<:Tuple}
 
 # HUOM: turha määritellä esim (f::CurryHead)(y) = f.f(f.x, y; f.kw...), koska funktio parametreilla (y; kw...) näyttää aina rynnivän yli
-# kwargittomasta versiosta
+# kwargittomasta versiosta. Tää taitaa liittyä jotenkin siihen miten kwargit toimii konepellin alla
 
 @inline (f::CurryHead)(y; kw...) = f.f(f.x, y; _merge_nonempty(f.kw, kw)...)
 @inline (f::CurryHead)(ys...; kw...) = f.f(f.x, ys...; _merge_nonempty(f.kw, kw)...)
 
-# methods below are used when the initial value in f.x is a Tuple
+# methods below are used when the value in f.x is a Tuple, ie. when multiple arguments were bound
 
 @inline (f::CurryHeadTup)(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
 @inline (f::CurryHeadTup)(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
 
-struct CurryTail{T,F,KW} <: Function
+@testitem "CurryHead" begin
+
+end
+
+struct CurryTail{InitArg,F<:Function,KW} <: Function
   f::F
-  x::T
+  x::InitArg
   kw::KW
 
   CurryTail(f::F, x; kwargs...) where {F} = new{_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
-  CurryTail(f::Type{F}, x; kwargs...) where {F} = new{_stable_typeof(x),Type{F},_stable_typeof(kwargs)}(f, x, kwargs)
-
   CurryTail(f::F, x...; kwargs...) where {F} = new{_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
-  CurryTail(f::Type{F}, x...; kwargs...) where {F} = new{_stable_typeof(x),Type{F},_stable_typeof(kwargs)}(f, x, kwargs)
 end
 
-const CurryTailTup = CurryTail{T} where {T<:Tuple}
+const CurryTailTup = CurryTail{InitArg} where {InitArg<:Tuple}
 
 @inline (f::CurryTail)(y; kw...) = f.f(y, f.x; _merge_nonempty(f.kw, kw)...)
 @inline (f::CurryTail)(ys...; kw...) = f.f(ys..., f.x; _merge_nonempty(f.kw, kw)...)
@@ -135,8 +133,11 @@ const _emptyKW = pairs((;))
     @© fn(a, b)
     @© fn(a; kw=1)
 
-Convenience macro for constructing a [`CurryHead`](@ref). The argument must be a function call with at least one argument, 
-and zero or more keyword arguments.
+Curry a function call so that arguments are bound starting from the first (left). The argument must be a function call with at least one argument, and zero or more keyword arguments.
+
+    curried = @© fn(a,b); curried(c, d) == fn(a, b, c, d)
+
+See [`CurryHead`](@ref).
 
 ```jldoctest
 julia> a = 1; plus1 = @© +(a);
@@ -147,22 +148,22 @@ julia> plus1(2)
 julia> plus1(2, 3)
 6
 
-julia> b = 2; digger = @© digits(Int; base=b);
+julia> to_binary_digits = @© digits(Int; base=2);
 
-julia> show(digger(20; pad=8))
+julia> show(to_binary_digits(20; pad=8))
 [0, 0, 1, 0, 1, 0, 0, 0]
 
-julia> show(digger(20))
+julia> show(to_binary_digits(20))
 [0, 0, 1, 0, 1]
 
-julia> fn = (a,b,c,d;kw1,kw2) -> (a+b+c+d)kw1 // kw2;
+julia> fn = (a, b, c, d; kw1, kw2) -> (a+b+c+d)kw1 // kw2;
 
-julia> fc = @© fn(1, 2; kw1 = 13);
+julia> curried = @© fn(1, 2; kw1 = 13);
 
-julia> fc(3, 40; kw2 = 1000) # same as fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000)
-299//500
+julia> curried(3, 4; kw2 = 1000) # same as fn(1, 2, 3, 4; kw1 = 13, kw2 = 1000)
+13//100
 
-julia> fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000) == fc(3, 40; kw2 = 1000)
+julia> fn(1, 2, 3, 4; kw1 = 13, kw2 = 1000) == curried(3, 4; kw2 = 1000)
 true
 ```
 """
@@ -179,14 +180,14 @@ Convenience macro for constructing a [`CurryTail`](@ref). The argument must be a
 and zero or more keyword arguments.
 
 ```jldoctest
-julia> fn = (a,b,c,d;kw1,kw2) -> (a+b+c+d)kw1 // kw2;
+julia> fn = (a, b, c, d; kw1, kw2) -> (a+b+c+d)kw1 // kw2;
 
-julia> fc = @£ fn(3, 40; kw2 = 1000);
+julia> curried = @© fn(1, 2; kw1 = 13);
 
-julia> fc(1, 2; kw1 = 13) # same as fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000)
+julia> curried(3, 40; kw2 = 1000) # same as fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000)
 299//500
 
-julia> fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000) == fc(1, 2; kw1 = 13)
+julia> fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000) == curried(3, 40; kw2 = 1000)
 true
 ```
 
