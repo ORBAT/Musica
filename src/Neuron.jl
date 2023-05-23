@@ -35,13 +35,13 @@ function parse_n_bits(bits::T, n)::Tuple{BitVector,Int} where {T<:AbstractArray}
   (bits |> Drop(n) |> collect, undigits(bits |> Take(n) |> collect))
 end
 
-const default_bits_per_generation = 5
+const default_bits_per_generation::Int = 5
 
-parser_bits_required(::Type{<:CANeuron{2}}; bits_per_gen::Type{Val{_bits_per_generation}}=Val{default_bits_per_generation}, restkw...) where {_bits_per_generation} = _bits_per_generation + parser_bits_required(DiscreteCA{2}; restkw...)
+parser_bits_required(::Type{<:CANeuron{2}}; bits_per_gen=default_bits_per_generation, restkw...) = bits_per_gen + parser_bits_required(DiscreteCA{2}; restkw...)
 
-function parser(::Type{<:CANeuron{2,W}}; bits_per_gen::Type{Val{_bits_per_generation}}=Val{default_bits_per_generation}) where {W,_bits_per_generation}
+function parser(::Type{<:CANeuron{2,W}}; bits_per_gen=default_bits_per_generation) where {W}
   function p(bits::T)::Tuple{BitVector,CANeuron{2,W}} where {T<:AbstractArray}
-    bitsleft, generations = parse_n_bits(bits, _bits_per_generation)
+    bitsleft, generations = parse_n_bits(bits, bits_per_gen)
     bitsleft, ca = parser(DiscreteCA{2})(bitsleft)
     (bitsleft, CANeuron{2,W}(ca, generations))
   end
@@ -57,14 +57,14 @@ end
 @testitem "CANeuron parsing" begin
   n_generations = 12
   rule = 110
-  const bits_per_gen = 5
-  gen_bits = digits(n_generations; base=2, pad=bits_per_gen)
+  const _bits_per_gen = 5
+  gen_bits = digits(n_generations; base=2, pad=_bits_per_gen)
   ca_bits = digits(rule; base=2, pad=8)
   full_bits = BitVector(vcat(gen_bits, ca_bits))
 
   extra_bits = BitVector(vcat(gen_bits, ca_bits, ca_bits))
 
-  p = Musica.parser(CANeuron{2,8}; bits_per_gen=Val{bits_per_gen})
+  p = Musica.parser(CANeuron{2,8}; bits_per_gen=_bits_per_gen)
 
   @test p(full_bits) == (Bool[], CANeuron{2,8}(DiscreteCA{2}(110), n_generations))
   @test p(BitVector(gen_bits)) == (Bool[], CANeuron{2,8}(DiscreteCA{2}(0), n_generations))
@@ -143,11 +143,11 @@ end
 @testitem "CANeuronStack parsing" begin
   rule1 = 110
   rule2 = 30
-  const bits_per_gen = 5
+  const _bits_per_gen = 5
   n_generations1 = 5
   n_generations2 = 20
-  gen_bits1 = digits(n_generations1; base=2, pad=bits_per_gen)
-  gen_bits2 = digits(n_generations2; base=2, pad=bits_per_gen)
+  gen_bits1 = digits(n_generations1; base=2, pad=_bits_per_gen)
+  gen_bits2 = digits(n_generations2; base=2, pad=_bits_per_gen)
   ca1_bits = digits(rule1; base=2, pad=8)
   ca2_bits = digits(rule2; base=2, pad=8)
   full_bits1 = BitVector(vcat(gen_bits1, ca1_bits))
@@ -156,6 +156,6 @@ end
   test_can1 = CANeuron{2,32}(DiscreteCA{2}(110), n_generations1)
   test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_generations2)
 
-  p = Musica.parser(CANeuronStack{2,2,32}; bits_per_gen=Val{bits_per_gen})
+  p = Musica.parser(CANeuronStack{2,2,32}; bits_per_gen=_bits_per_gen)
   @test p(vcat(full_bits1, full_bits2)) == (Bool[], CANeuronStack{2}(test_can1, test_can2))
 end
