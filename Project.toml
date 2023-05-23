@@ -5,6 +5,7 @@ version = "0.0.1"
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 ComputedFieldTypes = "459fdd68-db75-56b8-8c15-d717a790f88e"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 FromFile = "ff7dd447-1dcb-4ce3-b8ac-22a812192de7"
 GrayCode = "3c6b6a22-b11f-44c2-accc-f87d49953a21"
