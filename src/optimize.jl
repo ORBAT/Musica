@@ -113,30 +113,6 @@ end
 # _row_width() = 16
 # _bits_per_generation() = 3
 
-
-# function optimize(fn)
-#   _Stack = CANeuronStack{32, 2, _row_width()}
-
-#   information = Information(f_optimum=0.0)
-#   options = Options(f_tol=0.05,
-#     time_limit=60.0 * 0.5,
-#     # f_calls_limit=8,
-#     parallel_evaluation=true,
-#     store_convergence=true
-#   )
-#   Metaheuristics.optimize(fn,
-#     BitArraySpace(num_bits),
-#     GA(
-#       N=1,
-#       information=information,
-#       options=options,
-#       p_mutation=16e-4,
-#       # HUOM: isompi N ja pienempi K on hyväksi explorationille
-#       selection=TournamentSelection(K=2, N=pop_size * 2)
-#       ; termination=Metaheuristics.RelativeFunctionConvergence()
-#     ))
-# end
-
 _row_width()::Int = 16
 _bits_per_generation()::Int = 3
 _pop_size()::Int = 2500
@@ -145,7 +121,7 @@ _test_wanted_output(num_cycles=3, scale_factor=2) = _normalize([sin(x / scale_fa
 
 _StackType() = CANeuronStack{29,2,_row_width()}
 
-_test_parser() = Musica.parser(_StackType();bits_per_gen=_bits_per_generation())
+_test_parser() = Musica.parser(_StackType(); bits_per_gen=_bits_per_generation())
 _test_parser_bits_required() = Musica.parser_bits_required(_StackType(); bits_per_gen=_bits_per_generation())
 
 function _do_opt()
