@@ -10,10 +10,16 @@ Is a subtype of `AbstractVector` and should implement the whole interface for it
 struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
   coll::C
 
+  """
+  Create a new `Row` from a `StaticVector` or a `SizedVector`.
+  """
   function Row{NStates,Len,T,C}(c::C) where {NStates,Len,T,C<:Union{StaticVector{Len,T},SizedVector{Len,T}}}
     new(c)
   end
 
+  """
+  Create a new `Row` from any `AbstractArray` `c`. Checks that `c`'s length is equal to `Len`
+  """
   function Row{NStates,Len,T,C}(c::C) where {NStates,Len,T,C<:AbstractArray}
     @assert length(c) == Len "Tried to construct a Row with Len type parameter $Len, but with a collection of length $(length(c))"
     new(c)
@@ -215,4 +221,21 @@ count_ones(r::Row{2})::Int = sum(filter(==(1), r))
 @testitem "num_as_ones" begin
   @test_throws AssertionError Musica.num_as_ones(-1, Val{8})
   @test_throws AssertionError Musica.num_as_ones(256, Val{8})
+end
+
+"""
+Interpret a `Row` as being a Gray-coded integer
+"""
+@inline row_from_gray(r::Row{2})::Int = r |> Musica.undigits |> num_from_gray
+
+@inline num_to_gray(x) = (x ⊻ (x >> 1))
+
+@inline num_to_gray_row(x, width=Val{16}) = x |> num_to_gray |> @£ num_as_row(width)
+
+@testitem "gray coding" begin
+  row_width = Val{5}
+  @test Musica.row_from_gray(Musica.num_as_row(5, row_width)) == 6
+  @test Musica.row_from_gray(Musica.num_as_row(10, row_width)) == 12
+  @test Musica.row_from_gray(Musica.num_as_row(1, row_width)) == 1
+  @test Musica.num_to_gray_row(12, row_width) == Musica.num_as_row(10, row_width)
 end
