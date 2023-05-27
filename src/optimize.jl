@@ -110,35 +110,46 @@ end
   end
 end
 
-# _row_width() = 16
-# _bits_per_generation() = 3
-
 _row_width()::Int = 16
 _bits_per_generation()::Int = 3
 _pop_size()::Int = 2500
+_bits_per_stack_size()::Int = 5
 
 _test_wanted_output(num_cycles=3, scale_factor=2) = _normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
+_test_wanted_output_cos(num_cycles=3, scale_factor=2) = _normalize([cos(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
+_test_wanted_output_tan(num_cycles=3, scale_factor=2) = _normalize([tan(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
 
-_StackType() = CANeuronStack{29,2,_row_width()}
+## HOX: tällä hetkellä tää on yllättävän hyvä optimoimaan tätä. CANeuronStack{29}, row_width = 16, bits_per_gen = 3
+function _test_wanted_output_rastr(D=10, step=0.5)
+  rastr(x) = 10D + sum(x .* x - 10cos.(2π * x))
+  _normalize([rastr(x) for x = -5:step:5])
+end
+
+_StackType() = CANeuronStack{32,2,_row_width()}
 
 _test_parser() = Musica.parser(_StackType(); bits_per_gen=_bits_per_generation())
-_test_parser_bits_required() = Musica.parser_bits_required(_StackType(); bits_per_gen=_bits_per_generation())
+_test_parser_dynamic() = parser(CANeuronStack;
+  bits_per_gen=_bits_per_generation(),
+  bits_per_stack_size=_bits_per_stack_size(),
+  state_width=_row_width()
+)
+_test_parser_bits_required() = Musica.parser_bits_required(CANeuronStack{2^_bits_per_stack_size(),2,_row_width()}; bits_per_gen=_bits_per_generation()) + 10
 
 function _do_opt()
   bpg = _bits_per_generation()
   pop_size = _pop_size()
-  _Stack = CANeuronStack{29,2,_row_width()}
+  _Stack = _StackType() #CANeuronStack{29,2,_row_width()}
   state_bits = _row_width()
 
   information = Information(f_optimum=0.0)
-  options = Options(f_tol=0.005,
-    time_limit=60.0 * 0.1,
+  options = Options(f_tol=eps(),
+    time_limit=60.0 * 1,
     # f_calls_limit=1,
     parallel_evaluation=true,
     store_convergence=true
   )
   wanted = _test_wanted_output()
-  obj_fn = _fitness_fn_parallel(to_obj_fn(Musica.parser(_Stack; bits_per_gen=bpg), gray_seq_sample_fitness_fn(wanted; state_bits=state_bits)))
+  obj_fn = _fitness_fn_parallel(to_obj_fn(_test_parser_dynamic(), gray_seq_sample_fitness_fn(wanted; state_bits=state_bits)))
 
   ga = GA(
     N=pop_size,
@@ -150,7 +161,7 @@ function _do_opt()
     ; termination=Metaheuristics.RelativeFunctionConvergence()
   )
 
-  num_bits = Musica.parser_bits_required(_Stack; bits_per_gen=bpg)
+  num_bits = _test_parser_bits_required() #Musica.parser_bits_required(_Stack; bits_per_gen=bpg)
 
   optimize(obj_fn, BitArraySpace(num_bits), ga)
 end
