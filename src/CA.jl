@@ -57,13 +57,14 @@ end
   Base.length, Base.axes, eltype, Base.IteratorSize, Base.IteratorEltype)
 
 struct DiscreteCA{NStates,Radius,RuleLen}
-  rule::Int
+  rule::UInt
   rule_lookup::SVector{RuleLen,Int}
 
-  function DiscreteCA{NStates,Radius,RuleLen}(rule::Int) where {NStates,Radius,RuleLen}
+  function DiscreteCA{NStates,Radius,RuleLen}(rule) where {NStates,Radius,RuleLen}
     @assert 0 ≤ rule < (NStates^RuleLen) "rule number for $(NStates) states must be ≥ 0 and < $(NStates^RuleLen), was $(rule)"
+    _r = convert(UInt, rule)
     @assert RuleLen == NStates^(2 * Radius + 1) "RuleLen must be NStates^(2 * Radius + 1)"
-    new(rule, rule_to_rule_lookup(rule, NStates, Radius))
+    new(rule, rule_to_rule_lookup(_r, NStates, Radius))
   end
 end
 
@@ -71,11 +72,11 @@ function Base.show(io::IO, ca::DiscreteCA{2,1})
   @printf(io, "DiscreteCA(ECA %3i)", ca.rule)
 end
 
-function DiscreteCA{NStates,Radius}(rule::Int) where {NStates,Radius}
+function DiscreteCA{NStates,Radius}(rule) where {NStates,Radius}
   DiscreteCA{NStates,Radius,NStates^(2 * Radius + 1)}(rule)
 end
 
-function DiscreteCA{NStates}(rule::Int) where {NStates}
+function DiscreteCA{NStates}(rule) where {NStates}
   DiscreteCA{NStates,1}(rule)
 end
 
@@ -146,24 +147,27 @@ end
 
 Treat d as a little-endian vector of digits in `base` and return the base-10 representation.
 
+- TODO: tuki arvoille jotka on `> typemax(UInt64)`
+
+
 ```jldoctest
 julia> Musica.undigits([0, 1, 1, 1, 1, 0, 0, 0])
-30
+0x000000000000001e
 
-julia> Musica.undigits(Musica.rule_to_rule_lookup(22, 3), 3)
-22
+julia> Musica.undigits(Musica.rule_to_rule_lookup(UInt(22), 3), 3)
+0x0000000000000016
 ```
 """
-undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=UInt64(0))
+undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=UInt(0))
 
 """
-    Musica.rule_to_rule_lookup(rule::Int, nstates::Int = 2, radius::Int = 1)
+    Musica.rule_to_rule_lookup(rule::UInt, nstates::Int = 2, radius::Int = 1)
 
 Return a little-endian vector for the transition rule padded to the max rule length. 
 Eg. for radius=1 nstates=2, index 1 is the result for 000, index 1 is for 001 etc.
 
 ```jldoctest
-julia> x = Musica.rule_to_rule_lookup(30);
+julia> x = Musica.rule_to_rule_lookup(UInt(30));
 
 julia> show(x)
 [0, 1, 1, 1, 1, 0, 0, 0]
@@ -172,13 +176,13 @@ julia> show(x)
 
 See also [`undigits`](@ref)
 """
-function rule_to_rule_lookup(rule::Int, nstates::Int=2, radius::Int=1)
+function rule_to_rule_lookup(rule::UInt, nstates::Int=2, radius::Int=1)
   RuleLen = nstates^(2 * radius + 1)
   SVector{RuleLen,Int}(digits(Int, rule; base=nstates, pad=RuleLen))
 end
 
 @testitem "Rule number to rule lookup array" begin
-  @test Musica.rule_to_rule_lookup(22, 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
+  @test Musica.rule_to_rule_lookup(UInt(22), 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
 end
 
 @inline function parser(::Type{DiscreteCA{2}}; kw...)
@@ -227,12 +231,12 @@ end
   @test_throws AssertionError Musica.num_as_ones(256, Val{8})
 end
 
-@inline num_from_gray(n) = UInt64(Integer(reinterpret(Gray64, n)))
+@inline num_from_gray(n) = UInt(Integer(reinterpret(Gray64, n)))
 
 """
 Interpret a `Row` as being a Gray-coded integer
 """
-@inline row_from_gray(r::Row{2})::UInt64 = r |> Musica.undigits |> num_from_gray
+@inline row_from_gray(r::Row{2}) = r |> Musica.undigits |> num_from_gray
 
 @inline num_to_gray(x) = (x ⊻ (x >> 1))
 
