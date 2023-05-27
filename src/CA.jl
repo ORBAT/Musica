@@ -181,13 +181,17 @@ end
   @test Musica.rule_to_rule_lookup(22, 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
 end
 
-function parser(::Type{DiscreteCA{2}}; kw...)
+@inline function parser(::Type{DiscreteCA{2}}; kw...)
   function p(bits::T)::Tuple{BitVector,DiscreteCA{2}} where {T<:AbstractArray}
     (bits |> Drop(8) |> collect, DiscreteCA{2}(undigits(bits |> Take(8) |> collect)))
   end
 end
 
-parser_bits_required(::Type{<:DiscreteCA{2}}; kw...) = 8
+@testitem "parser" begin
+  @test digits(110; base=2) |> Musica.parser(DiscreteCA{2}) == (Bool[], Musica.DiscreteCA{2}(110))
+end
+
+@inline parser_bits_required(::Type{<:DiscreteCA{2}}; kw...) = 8
 
 """
     Musica.num_as_ones(n, Val{N})
@@ -207,26 +211,28 @@ julia> Musica.num_as_ones(6, Val{8})
  0
 ```
 """
-function num_as_ones(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
+@inline function num_as_ones(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
   @assert 0 ≤ n < BigInt(2)^L "n must be positive and smaller than 2^L ($(2^L)), was $n"
   Row{2,L}(digits(BigInt(2)^n - 1; base=2, pad=L))
 end
 
-function num_as_row(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
+@inline function num_as_row(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
   Row{2,L}(digits(n; base=2, pad=L))
 end
 
-count_ones(r::Row{2})::Int = sum(filter(==(1), r))
+@inline count_ones(r::Row{2})::Int = sum(filter(==(1), r))
 
 @testitem "num_as_ones" begin
   @test_throws AssertionError Musica.num_as_ones(-1, Val{8})
   @test_throws AssertionError Musica.num_as_ones(256, Val{8})
 end
 
+@inline num_from_gray(n) = UInt64(Integer(reinterpret(Gray64, n)))
+
 """
 Interpret a `Row` as being a Gray-coded integer
 """
-@inline row_from_gray(r::Row{2})::Int = r |> Musica.undigits |> num_from_gray
+@inline row_from_gray(r::Row{2})::UInt64 = r |> Musica.undigits |> num_from_gray
 
 @inline num_to_gray(x) = (x ⊻ (x >> 1))
 
