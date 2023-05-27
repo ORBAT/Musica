@@ -8,7 +8,7 @@ struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
   generations::Int
 
   function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, gens::Int) where {NStates,Width}
-    if gens < 0
+    if gens ≤ 0
       gens = 1
     end
     new(ca, repeated(ca, gens), gens)
