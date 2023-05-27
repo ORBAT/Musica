@@ -154,7 +154,7 @@ julia> Musica.undigits(Musica.rule_to_rule_lookup(22, 3), 3)
 22
 ```
 """
-undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=0)
+undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=UInt64(0))
 
 """
     Musica.rule_to_rule_lookup(rule::Int, nstates::Int = 2, radius::Int = 1)
