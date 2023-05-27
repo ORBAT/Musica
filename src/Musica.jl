@@ -8,5 +8,7 @@ export DiscreteCA, Row
 include("Neuron.jl")
 export CANeuron, CANeuronStack
 
+include("optimize.jl")
+
 end
 
