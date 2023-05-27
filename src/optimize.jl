@@ -168,7 +168,7 @@ function _do_opt()
     N=pop_size,
     information=information,
     options=options,
-    p_mutation=16e-4,
+    p_mutation=32e-4,
     # HUOM: isompi N ja pienempi K on hyväksi explorationille
     selection=TournamentSelection(K=2, N=pop_size * 2)
     ; termination=Metaheuristics.RelativeFunctionConvergence()
