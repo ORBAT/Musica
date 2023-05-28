@@ -37,7 +37,7 @@ function Base.show(io::IO, ::MIME"text/plain", can::CANeuron{NS,Width}) where {N
 end
 
 
-function (can::CANeuron{N,W})(state::State)::State where {N,W,State<:Row{N,W}}
+@inline function (can::CANeuron{N,W})(state::State)::State where {N,W,State<:Row{N,W}}
   can.repeated_ca_fn(state)
 end
 
@@ -45,7 +45,7 @@ const default_bits_per_generation::Int = 5
 
 parser_bits_required(::Type{<:CANeuron{2}}; bits_per_gen=default_bits_per_generation, restkw...) = bits_per_gen + parser_bits_required(DiscreteCA{2}; restkw...)
 
-function parser(::Type{<:CANeuron{2,W}}; bits_per_gen=default_bits_per_generation) where {W}
+@inline function parser(::Type{<:CANeuron{2,W}}; bits_per_gen=default_bits_per_generation) where {W}
   Parser() do bits
     bitsleft, generations = parse_n_bits(bits, bits_per_gen)
     bitsleft, ca = parser(DiscreteCA{2})(bitsleft)
@@ -102,7 +102,7 @@ function Base.show(io::IO, ::MIME"text/plain", cas::CANeuronStack{Size,NStates,W
   println(io, "]")
 end
 
-function (cas::CANeuronStack{S,N,W})(state::State)::State where {S,N,W,State<:Row{N,W}}
+@inline function (cas::CANeuronStack{S,N,W})(state::State)::State where {S,N,W,State<:Row{N,W}}
   foldl(cas; init=state) do acc, can
     can(acc)
   end
@@ -141,7 +141,7 @@ function parser_bits_required(::Type{<:CANeuronStack}; bits_per_stack_size::Int,
   2^bits_per_stack_size * parser_bits_required(CANeuron{2}; kw...)
 end
 
-@inline function parser(::Type{<:CANeuronStack{S,2,W}}; kw...) where {S,W}
+function parser(::Type{<:CANeuronStack{S,2,W}}; kw...) where {S,W}
   Parser() do bits
     out = Vector{CANeuron{2,W}}(undef, S)
     can_parser = Musica.parser(CANeuron{2,W}; kw...)

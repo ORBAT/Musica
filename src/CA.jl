@@ -100,7 +100,7 @@ end
 
 **HOX HOX** kokeillu vähän kaikkea mutta tän return type jostain syystä vaan tahtoo olla `any` jos statea ei tyypitä
 """
-function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,L,State<:Row{NS,L}}
+@inline function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,L,State<:Row{NS,L}}
   # state wraps around at the ends
   ws = _wrap_state(state, RD)
   # run ws through xf, fold it into a container that's similar to `state` 
@@ -123,22 +123,22 @@ Make `state` wrap around at the ends by prepending the `radius` last elements an
 
 Returns an [eduction](https://juliafolds.github.io/Transducers.jl/stable/reference/manual/#Transducers.eduction).
 """
-_wrap_state(state, radius) = (@inbounds(@view(state[end-radius+1:end])), state, @inbounds(@view(state[1:radius]))) |> Cat()
+@inline _wrap_state(state, radius) = (@inbounds(@view(state[end-radius+1:end])), state, @inbounds(@view(state[1:radius]))) |> Cat()
 
-neighborhood_size(::Type{DiscreteCA{NS,RD,RuL}}) where {NS,RD,RuL} = RD * 2 + 1
+@inline neighborhood_size(::Type{DiscreteCA{NS,RD,RuL}}) where {NS,RD,RuL} = RD * 2 + 1
 
 """Return a transducer that applies the CA's rule.
 
 - slices into windows (neighborhoods) of length neighborhood_size, 1 step at a time
 - turns each neighborhood x into a number, uses that to index into the rule_lookup to get the result
 """
-function _transducer(dca::T) where {T<:DiscreteCA}
+@inline function _transducer(dca::T) where {T<:DiscreteCA}
   Consecutive(neighborhood_size(T), 1) |>
   Map(@© _lookup_rule(dca))
 end
 
-function _lookup_rule(dca::DiscreteCA{NS}, x) where {NS}
-  dca.rule_lookup[undigits(x, NS)+1]
+@inline function _lookup_rule(dca::DiscreteCA{NS}, x) where {NS}
+  @inbounds dca.rule_lookup[undigits(x, NS)+1]
 end
 
 @testitem "evolution" begin
@@ -187,7 +187,7 @@ julia> show(x)
 
 See also [`undigits`](@ref)
 """
-function rule_to_rule_lookup(rule::UInt, nstates::Int=2, radius::Int=1)
+@inline function rule_to_rule_lookup(rule::UInt, nstates::Int=2, radius::Int=1)
   RuleLen = nstates^(2 * radius + 1)
   SVector{RuleLen,Int}(digits(Int, rule; base=nstates, pad=RuleLen))
 end
