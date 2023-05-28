@@ -80,8 +80,7 @@ function gray_both_obj_fn_for(wanted::T; state_bits::Int=16) where {T<:AbstractA
   end
 end
 
-function gray_seq_sample_fitness_fn(wanted::T; state_bits::Int=16) where {T<:AbstractArray}
-  n_samples = 4 # length(wanted) ÷ 4 # == 8 jos num_cycles=3 scale_factor
+function gray_seq_sample_fitness_fn(wanted::T; state_bits::Int=16, n_samples=4) where {T<:AbstractArray}
   start_idx = rand(1:length(wanted)-n_samples)
   idxs = start_idx:start_idx+n_samples
   inp = idxs |> Map(num_to_gray_row)
@@ -112,7 +111,7 @@ end
 
 _row_width()::Int = 16
 _bits_per_generation()::Int = 3
-_pop_size()::Int = 2500
+_pop_size()::Int = 3500
 _bits_per_stack_size()::Int = 5
 
 _test_wanted_output(num_cycles=3, scale_factor=2) = _normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
@@ -135,6 +134,20 @@ _test_parser_dynamic() = parser(CANeuronStack;
 )
 _test_parser_bits_required() = Musica.parser_bits_required(CANeuronStack{2^_bits_per_stack_size(),2,_row_width()}; bits_per_gen=_bits_per_generation()) + 10
 
+
+## HUOM: _Neverstop ja default_stop_check-metodi on klugeja joilla yritän estää vitun Metaheuristicsia luovuttamasta kesken kaiken
+
+struct _Neverstop <: Metaheuristics.AbstractTermination end
+
+function Metaheuristics.stop_check(population, criteria::_Neverstop)
+  false
+end
+
+# function Metaheuristics.default_stop_check(status, information, options)
+#   Metaheuristics.time_stop_check(status, information, options)
+# end
+
+
 function _do_opt()
   bpg = _bits_per_generation()
   pop_size = _pop_size()
@@ -146,7 +159,9 @@ function _do_opt()
     time_limit=60.0 * 1,
     # f_calls_limit=1,
     parallel_evaluation=true,
-    store_convergence=true
+    store_convergence=true,
+    iterations=typemax(Int64),
+    f_calls_limit=Inf
   )
   wanted = _test_wanted_output()
   obj_fn = _fitness_fn_parallel(to_obj_fn(_test_parser_dynamic(), gray_seq_sample_fitness_fn(wanted; state_bits=state_bits)))
@@ -159,6 +174,7 @@ function _do_opt()
     # HUOM: isompi N ja pienempi K on hyväksi explorationille
     selection=TournamentSelection(K=2, N=pop_size * 2)
     ; termination=Metaheuristics.RelativeFunctionConvergence()
+    # ; termination=_Neverstop()
   )
 
   num_bits = _test_parser_bits_required() #Musica.parser_bits_required(_Stack; bits_per_gen=bpg)
@@ -166,8 +182,9 @@ function _do_opt()
   optimize(obj_fn, BitArraySpace(num_bits), ga)
 end
 
-function get_best_at(fn, opt_result)
-  all_fitnesses = Folds.map(to_obj_fn(_test_parser(), fn), map(x -> x.x, opt_result.population))
+function get_best_at(fn, opt_result, parser)
+  all_fitnesses = Folds.map(to_obj_fn(parser, fn), map(x -> x.x, opt_result.population))
+  @info extrema(all_fitnesses)
   _min = minimum(all_fitnesses)
   best_idx = findfirst(≈(_min), all_fitnesses)
   opt_result.population[best_idx].x
