@@ -197,7 +197,7 @@ end
 end
 
 @inline function parser(::Type{DiscreteCA{2}}; kw...)
-  function p(bits::T)::Tuple{BitVector,DiscreteCA{2}} where {T<:AbstractArray}
+  Parser() do bits
     (bits |> Drop(8) |> collect, DiscreteCA{2}(undigits(bits |> Take(8) |> collect)))
   end
 end
