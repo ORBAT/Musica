@@ -7,11 +7,13 @@ struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
   repeated_ca_fn::Function
   generations::Int
 
-  function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, gens::Int) where {NStates,Width}
-    if gens ≤ 0
-      gens = 1
+  function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, gens::Integer) where {NStates,Width}
+    _g = if gens ≤ 0
+      Int(1)
+    else 
+      Int(gens)
     end
-    new(ca, repeated(ca, gens), gens)
+    new(ca, repeated(ca, gens), _g)
   end
 
 end
