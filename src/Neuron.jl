@@ -13,7 +13,7 @@ struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
     else 
       Int(gens)
     end
-    new(ca, repeated(ca, gens), _g)
+    new(ca, repeated(ca, _g), _g)
   end
 
 end
