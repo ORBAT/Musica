@@ -79,7 +79,7 @@ julia> Musica.parser(Musica.ParseUInt(2))([1,1,0])
 ParseUInt(nbits) = ParseUInt{nbits}
 
 @inline function parser(::Type{ParseUInt{NBits}}) where {NBits}
-  @£ parse_n_bits(NBits)
+  Parser(@£ parse_n_bits(NBits))
 end
 
 @testitem "ParseUInt" begin
@@ -90,7 +90,7 @@ end
 
 Return a [`Parser`](@ref) for `type`.
 """
-function parser(::Type{T})::Parser where {T}
+function parser(::Type{T}) where {T}
   error("No parser registered for ", T)
 end
 
