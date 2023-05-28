@@ -73,7 +73,7 @@ A [Parser](@ref) that parses `nbits` bits as a little-endian unsigned integer
 
 ```jldoctest
 julia> Musica.parser(Musica.ParseUInt(2))([1,1,0])
-([0], 3)
+([0], 0x0000000000000003)
 ```
 """
 ParseUInt(nbits) = ParseUInt{nbits}
