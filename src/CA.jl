@@ -56,7 +56,7 @@ end
 @forward Row.coll (Base.size, Base.getindex, Base.setindex!, Base.firstindex, Base.lastindex, Base.iterate,
   Base.length, Base.axes, eltype, Base.IteratorSize, Base.IteratorEltype)
 
-struct DiscreteCA{NStates,Radius,RuleLen}
+struct DiscreteCA{NStates,Radius,RuleLen} <: Function
   rule::UInt
   rule_lookup::SVector{RuleLen,Int}
 
@@ -66,6 +66,14 @@ struct DiscreteCA{NStates,Radius,RuleLen}
     @assert RuleLen == NStates^(2 * Radius + 1) "RuleLen must be NStates^(2 * Radius + 1)"
     new(rule, rule_to_rule_lookup(_r, NStates, Radius))
   end
+end
+
+@inline function Base.hash(a::DiscreteCA{N,R,RL}, h::UInt) where {N,R,RL}
+  hash(:DiscreteCA, h) |> @©(hash(N)) |> @©(hash(R)) |> @©(hash(a.rule))
+end
+
+@inline function Base.:(==)(a::DiscreteCA{N1,R1}, b::DiscreteCA{N2,R2}) where{N1,R1,N2,R2}
+  isequal(N1, N2) && isequal(R1, R2) && isequal(a.rule, b.rule)
 end
 
 function Base.show(io::IO, ca::DiscreteCA{2,1})
