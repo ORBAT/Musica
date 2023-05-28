@@ -41,10 +41,6 @@ function (can::CANeuron{N,W})(state::State)::State where {N,W,State<:Row{N,W}}
   can.repeated_ca_fn(state)
 end
 
-function parse_n_bits(bits::T, n)::Tuple{BitVector,Int} where {T<:AbstractArray}
-  (bits |> Drop(n) |> collect, undigits(bits |> Take(n) |> collect))
-end
-
 const default_bits_per_generation::Int = 5
 
 parser_bits_required(::Type{<:CANeuron{2}}; bits_per_gen=default_bits_per_generation, restkw...) = bits_per_gen + parser_bits_required(DiscreteCA{2}; restkw...)
