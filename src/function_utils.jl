@@ -11,6 +11,9 @@ _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 Compose `fn` with itself `times` times
 """
 function repeated(fn, times)::Function
+  if times == 1
+    return fn
+  end
   # foldl takes a fn (acc, x). (fn ∘ _left) is (acc,_) -> fn(acc)
   # this is basically just fn composed with itself `times` times (fn ∘ fn ∘ ... )
   (input) -> foldl((fn ∘ _left), 1:times; init=input)
