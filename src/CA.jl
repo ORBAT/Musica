@@ -164,6 +164,9 @@ julia> Musica.undigits([0, 1, 1, 1, 1, 0, 0, 0])
 
 julia> Musica.undigits(Musica.rule_to_rule_lookup(UInt(22), 3), 3)
 0x0000000000000016
+
+julia> Musica.undigits([])
+0x0000000000000000
 ```
 """
 undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=UInt(0))
