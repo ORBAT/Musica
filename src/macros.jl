@@ -22,3 +22,8 @@ macro forward(ex, fs)
        for f in fs]...);
     nothing)
 end
+
+
+macro _return_if_nothing(ex, varname)
+  :(if isnothing($(esc(ex))) return $(esc(varname)), nothing; end)
+end
