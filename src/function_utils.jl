@@ -2,26 +2,35 @@ using Transducers, TestItems, Test, MacroTools
 
 using Lazy: iterated
 
-_stable_typeof(x) = typeof(x)
-_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
+@inline _stable_typeof(x) = typeof(x)
+@inline _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
 """
     repeated(fn, times)
 
 Compose `fn` with itself `times` times
 """
-function repeated(fn, times)::Function
+@inline function repeated(fn, times)::Function
   if times == 1
     return fn
   end
-  # foldl takes a fn (acc, x). (fn ∘ _left) is (acc,_) -> fn(acc)
-  # this is basically just fn composed with itself `times` times (fn ∘ fn ∘ ... )
-  (input) -> foldl((fn ∘ _left), 1:times; init=input)
+  # repeated_fold(fn, times)
+  # HUOM: exec time on reilusti nopeampi repeated_compose:n lopputuloksella, mutta
+  # sen composen kasaaminen (eli repeated_compose(fn,n) kutsu) kestää kauemmin ku mitä
+  # repeated_fold
+
+  if times ≤ 30
+    repeated_compose(fn, times)
+  else
+    repeated_fold(fn, times)
+  end
 end
 
-repeated_compose(fn, times) = ∘(fill(fn, times)...)
+@inline repeated_compose(fn, times) = ∘(fill(fn, times)...)
 
-repeated_fold(fn, times) = (input) -> foldl((fn ∘ _left), 1:times; init=input)
+# # foldl takes a fn (acc, x). (fn ∘ _left) is (acc,_) -> fn(acc)
+# # this is basically just fn composed with itself `times` times (fn ∘ fn ∘ ... )
+@inline repeated_fold(fn, times) = (input) -> foldl((fn ∘ _left), 1:times; init=input)
 
 _left(a, _) = a
 
