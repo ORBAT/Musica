@@ -80,7 +80,7 @@ end
 const CANeuronStack{S,N,W} = SVector{S,CANeuron{N,W}} where {S,N,W}
 
 function Base.show(io::IO, cas::CANeuronStack{Size,NStates,Width}) where {Size,NStates,Width}
-  print(io, "CANeuronStack(Size=$Size,NStates=$NStates,Width=$Width)", join(cas, ", "))
+  print(io, "CANeuronStack(Size=$Size,NStates=$NStates,Width=$Width)")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", cas::CANeuronStack{Size,NStates,Width}) where {Size,NStates,Width}
