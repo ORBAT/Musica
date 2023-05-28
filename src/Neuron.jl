@@ -46,7 +46,7 @@ const default_bits_per_generation::Int = 5
 parser_bits_required(::Type{<:CANeuron{2}}; bits_per_gen=default_bits_per_generation, restkw...) = bits_per_gen + parser_bits_required(DiscreteCA{2}; restkw...)
 
 function parser(::Type{<:CANeuron{2,W}}; bits_per_gen=default_bits_per_generation) where {W}
-  function p(bits::T)::Tuple{BitVector,CANeuron{2,W}} where {T<:AbstractArray}
+  Parser() do bits
     bitsleft, generations = parse_n_bits(bits, bits_per_gen)
     bitsleft, ca = parser(DiscreteCA{2})(bitsleft)
     (bitsleft, CANeuron{2,W}(ca, generations))
