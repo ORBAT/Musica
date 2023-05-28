@@ -110,8 +110,8 @@ end
 end
 
 _row_width()::Int = 16
-_bits_per_generation()::Int = 3
-_pop_size()::Int = 3500
+_bits_per_generation()::Int = 7
+_pop_size()::Int = 1500
 _bits_per_stack_size()::Int = 5
 
 _test_wanted_output(num_cycles=3, scale_factor=2) = _normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
@@ -132,7 +132,9 @@ _test_parser_dynamic() = parser(CANeuronStack;
   bits_per_stack_size=_bits_per_stack_size(),
   state_width=_row_width()
 )
-_test_parser_bits_required() = Musica.parser_bits_required(CANeuronStack{2^_bits_per_stack_size(),2,_row_width()}; bits_per_gen=_bits_per_generation()) + 10
+_test_parser_bits_required() = parser_bits_required(_StackType(); bits_per_gen=_bits_per_generation())
+
+_test_parser_bits_required_dyn() = Musica.parser_bits_required(CANeuronStack{2^_bits_per_stack_size(),2,_row_width()}; bits_per_gen=_bits_per_generation()) + 10
 
 
 ## HUOM: _Neverstop ja default_stop_check-metodi on klugeja joilla yritän estää vitun Metaheuristicsia luovuttamasta kesken kaiken
@@ -148,43 +150,44 @@ end
 # end
 
 
-function _do_opt()
-  bpg = _bits_per_generation()
+function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4)
+
   pop_size = _pop_size()
-  _Stack = _StackType() #CANeuronStack{29,2,_row_width()}
+
   state_bits = _row_width()
 
   information = Information(f_optimum=0.0)
   options = Options(f_tol=eps(),
-    time_limit=60.0 * 1,
-    # f_calls_limit=1,
+    time_limit=time_limit,
     parallel_evaluation=true,
     store_convergence=true,
     iterations=typemax(Int64),
-    f_calls_limit=Inf
+    f_calls_limit=f_calls_limit
   )
   wanted = _test_wanted_output()
-  obj_fn = _fitness_fn_parallel(to_obj_fn(_test_parser_dynamic(), gray_seq_sample_fitness_fn(wanted; state_bits=state_bits)))
+  obj_fn = _fitness_fn_parallel(to_obj_fn(_test_parser_dynamic(), gray_both_obj_fn_for(wanted; state_bits=state_bits)))
 
   ga = GA(
-    N=pop_size,
-    information=information,
-    options=options,
-    p_mutation=32e-4,
+    N=pop_size
+    ,information=information
+    ,options=options
+    , p_mutation=p_mutation
     # HUOM: isompi N ja pienempi K on hyväksi explorationille
-    selection=TournamentSelection(K=2, N=pop_size * 2)
-    ; termination=Metaheuristics.RelativeFunctionConvergence()
+    , selection=TournamentSelection(K=2, N=pop_size*2)
+    , termination=Metaheuristics.RelativeFunctionConvergence()
+    ## HOX: GenerationalReplacement ei vittu toimi jos tourn N>pop_size
+    # , environmental_selection=Metaheuristics.GenerationalReplacement()
+    , environmental_selection=Metaheuristics.ElitistReplacement()
     # ; termination=_Neverstop()
   )
 
-  num_bits = _test_parser_bits_required() #Musica.parser_bits_required(_Stack; bits_per_gen=bpg)
+  num_bits = _test_parser_bits_required_dyn() #Musica.parser_bits_required(_Stack; bits_per_gen=bpg)
 
   optimize(obj_fn, BitArraySpace(num_bits), ga)
 end
 
 function get_best_at(fn, opt_result, parser)
   all_fitnesses = Folds.map(to_obj_fn(parser, fn), map(x -> x.x, opt_result.population))
-  @info extrema(all_fitnesses)
   _min = minimum(all_fitnesses)
   best_idx = findfirst(≈(_min), all_fitnesses)
   opt_result.population[best_idx].x
