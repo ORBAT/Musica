@@ -8,11 +8,8 @@ struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
   generations::Int
 
   function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, gens::Integer) where {NStates,Width}
-    _g = if gens ≤ 0
-      Int(1)
-    else
-      Int(gens)
-    end
+    @assert gens > 0 "Number of generations must be >0, was $gens"
+    _g = Int(gens)
     new(ca, repeated(ca, _g), _g)
   end
 
@@ -49,7 +46,8 @@ parser_bits_required(::Type{<:CANeuron{2}}; bits_per_gen=default_bits_per_genera
   Parser() do bits
     bitsleft, generations = parse_n_bits(bits, bits_per_gen)
     bitsleft, ca = parser(DiscreteCA{2})(bitsleft)
-    (bitsleft, CANeuron{2,W}(ca, generations))
+    #HUOM: generations+1 että saadaan aina vähintään 1 generation
+    (bitsleft, CANeuron{2,W}(ca, Int(generations + 1)))
   end
 end
 
@@ -64,7 +62,8 @@ end
   n_generations = 12
   rule = 110
   const _bits_per_gen = 5
-  gen_bits = digits(n_generations; base=2, pad=_bits_per_gen)
+  #HUOM: -1 koska CANeuron lisää aina yhden. Ks CANeuron kommentit
+  gen_bits = digits(n_generations - 1; base=2, pad=_bits_per_gen)
   ca_bits = digits(rule; base=2, pad=8)
   full_bits = BitVector(vcat(gen_bits, ca_bits))
 
@@ -176,8 +175,9 @@ end
   const _bits_per_gen = 5
   n_generations1 = 5
   n_generations2 = 20
-  gen_bits1 = digits(n_generations1; base=2, pad=_bits_per_gen)
-  gen_bits2 = digits(n_generations2; base=2, pad=_bits_per_gen)
+  #HUOM: -1 koska CANeuron lisää aina yhden, ks CANeuron kommentit
+  gen_bits1 = digits(n_generations1 - 1; base=2, pad=_bits_per_gen)
+  gen_bits2 = digits(n_generations2 - 1; base=2, pad=_bits_per_gen)
   ca1_bits = digits(rule1; base=2, pad=8)
   ca2_bits = digits(rule2; base=2, pad=8)
   full_bits1 = BitVector(vcat(gen_bits1, ca1_bits))
@@ -198,8 +198,9 @@ end
   n_generations1 = 5
   n_generations2 = 20
 
-  gen_bits1 = digits(n_generations1; base=2, pad=_bits_per_gen)
-  gen_bits2 = digits(n_generations2; base=2, pad=_bits_per_gen)
+  #HUOM: -1 koska CANeuron lisää aina yhden, ks CANeuron kommentit
+  gen_bits1 = digits(n_generations1 - 1; base=2, pad=_bits_per_gen)
+  gen_bits2 = digits(n_generations2 - 1; base=2, pad=_bits_per_gen)
   ca1_bits = digits(rule1; base=2, pad=8)
   ca2_bits = digits(rule2; base=2, pad=8)
   can1_bits = BitVector(vcat(gen_bits1, ca1_bits))
