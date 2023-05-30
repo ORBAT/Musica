@@ -33,7 +33,8 @@ function _normalize(x)
 end
 
 @inline _normalize_num(n, max_val) = n / max_val
-
+@inline _normalize_num(n, ::Type{Val{max_val}}) where {max_val} = _normalize_num(n, max_val)
+@inline _normalize_num(n, ::Val{max_val}) where {max_val} = _normalize_num(n, max_val)
 """
 TODO: enkuksi
 
@@ -51,6 +52,7 @@ Tyypit:
 """
 @inline function to_obj_fn(genotype_parser::Function, fitness_fn::Function)
   # HOX: DEPREKOITU
+  error("ÄLÄ KÄYTÄ")
   function obj_fn(genome)
     # _ on genome:istä consumeamatta jääneet bitit
     (_, indiv) = genome |> genotype_parser
@@ -60,37 +62,57 @@ end
 
 """
 - `result_generator = indiv::Fn -> (wanted::Number[], Vector{Row})`. Ottaa yksilön, ajaa sen läpi jotain inputtia ja pullauttaa ulos sekä , että resultin eli listan rivejä. Luodaan funkkarilla jonka tyyppi on `input_data -> indiv -> Vector{Row}` (`input_data` ei välttis ole sama kuin `wanted`)
-- `fitness_fn = wanted::Number[] -> Vector{Row} -> Float64`
+- `fitness_fn = (wanted::Number[], )`
 """
 @inline function to_obj_fn(genotype_parser_fn, result_generator_fn, fitness_fn)
   function obj_fn(bits)
     # HOX: tässä mallissa result_generator_fn:n ja fitness_fn:n välillä on riippuvuus. Esim se samplaava obj fun, jossa StatsBase.rmsd(result, wanted[idxs])
     # TODO: tää ratkasu että result_generator_fn palauttaa myös wanted-Arrayn on kyllä vähän vitusta, mutta menköön ny toistaseks
-    fitness_fn((bits |> genotype_parser_fn |> _right |> result_generator_fn)...)
+    res = (bits |> genotype_parser_fn |> _right |> result_generator_fn)
+    fitness_fn(res...)
   end
 end
 
-# @inline function make_fitness_function(output_mapper_fn::Function=row_from_gray, stats_fn::Function=StatsBase.rmsd)
-#   function fitness_fn(wanted, row)
-#     result = row |> output_mapper_fn
-#     stats_fn(result, wanted)
-#   end
-# end
+gray_inp_out(w::Type{Val{width}}=Val{16}) where {width} = @£(num_to_gray_row(w)), (@£(_normalize_num(2^width-1)) ∘ row_from_gray)
 
-gray_enc_dec() = num_to_gray_row, row_from_gray
+function full_result_generator(wanted::T; state_bits=16, mappers=gray_inp_out(Val{state_bits})) where {T<:AbstractArray}
+  (input_mapper, output_mapper) = mappers
+  len_wanted = length(wanted)
+  inp = 1:len_wanted |> Map(input_mapper)
+  function full_result(indiv)
+    # @info "full_result indiv", indiv
+    # @info "full res inp", typeof(inp)
+    result = inp |> Map(output_mapper ∘ indiv) |> collect
+    # any(map(row -> !all(==(0), row), result)) && @info "nonzero " result
+    # error("HUORA")
+    (wanted, result)
+  end
+end
 
-function sampled_result_generator(wanted::T; state_bits=16, sequence_len=3, n_samples=6) where {T<:AbstractArray}
+"""
+- `input_mapper` muuntaa inputin, joka on luultavasti joku Number[], `Row`iksi jollain enkoodauksella (esim. Gray [num_to_gray_row](@ref))
+- `output_mapper` sama ku ^ mutta toisin päin, Row -> Number
+"""
+function sampled_result_generator(wanted::T; state_bits=16, sequence_len=3, n_samples=6, mappers=gray_inp_out(Val{state_bits})) where {T<:AbstractArray}
+  (input_mapper, output_mapper) = mappers
   start_idx_range = 1:(length(wanted)-sequence_len)
   _n_samples = min(length(start_idx_range), n_samples)
+  to_ranges = Map(start_idx -> start_idx:start_idx+sequence_len) |> Cat() |> Unique()
   function sampled_result(indiv)
-    to_ranges = Map(start_idx -> start_idx:start_idx+sequence_len) |> Cat() |> Unique()
     start_idxs = rand(start_idx_range, _n_samples)
-    idxs = start_idxs |> to_ranges
-    inp = idxs |> Map(num_to_gray_row)
-    result = inp |> Map(indiv) |> collect
-
+    idxs = start_idxs |> to_ranges |> collect
+    inp = idxs |> Map(input_mapper)
+    result = inp |> Map(output_mapper ∘ indiv) |> collect
+    (wanted[idxs], result)
   end
 end
+
+@inline function make_fitness_function(stats_fn::Function=StatsBase.rmsd)
+  function fitness_fn(wanted, result)
+    stats_fn(wanted, result)
+  end
+end
+
 
 @inline _right((_, r)) = r
 @inline _right(_, r) = r
@@ -118,23 +140,16 @@ end
 
   @test Musica.to_obj_fn(_parserfn, _res_gen, _fit_fn)(indiv_bits) == 0
 
+  _TestStack = Musica.CANeuronStack{1,2,16}
+  _test_parser = Musica.parser(_TestStack; bits_per_gen=2)
+  
+
   #=   state = Row{2}(@SVector [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
   ca = DiscreteCA{2}(110)
 
   @test ca(state) == [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   @inferred(ca(state)) =#
 
-end
-
-function gray_both_obj_fn_for(wanted::T; state_bits::Int=16) where {T<:AbstractArray}
-  len_wanted = length(wanted)
-  inp = 1:len_wanted |> Map(num_to_gray_row)
-  state_max_val = 2^state_bits - 1
-  _normalize_output = @£ _normalize_num(state_max_val)
-  function f(indiv)
-    result = inp |> Map(_normalize_output ∘ row_from_gray ∘ indiv) |> collect
-    StatsBase.rmsd(result, wanted)
-  end
 end
 
 function gray_seq_sample_fitness_fn(wanted::T; state_bits::Int=16, sequence_len=4) where {T<:AbstractArray}
@@ -200,15 +215,15 @@ end
 ##    (_, indiv) = bits |> genotype_parser
 ##    inp |> input_mapper |> indiv |> ouput_mapper |> fitness_fn
 
-@inline function _fitness_fn_parallel(fn::Function)
-  function fitness_par(input)
+@inline function _objective_fn_parallel(fn::Function)
+  function objfn_par(input)
     Folds.map(fn, eachrow(input))
   end
 end
 
 _row_width()::Int = 16
 _bits_per_generation()::Int = 7
-_pop_size()::Int = 800
+_pop_size()::Int = 200
 _bits_per_stack_size()::Int = 5
 
 _test_wanted_output(num_cycles=3, scale_factor=2) = _normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
@@ -246,6 +261,9 @@ end
 #   Metaheuristics.time_stop_check(status, information, options)
 # end
 
+_test_obj_fn() = to_obj_fn(_test_parser_dynamic(),
+sampled_result_generator(_test_wanted_output(6)),
+Musica.make_fitness_function())
 
 function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4)
 
@@ -261,8 +279,10 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
     iterations=typemax(Int64),
     f_calls_limit=f_calls_limit
   )
-  wanted = _test_wanted_output(6)
-  obj_fn = _fitness_fn_parallel(to_obj_fn(_test_parser_dynamic(), gray_multi_seq_sample_fitness_fn(wanted; state_bits=state_bits)))
+  # wanted = _test_wanted_output(6)
+  # obj_fn = _objective_fn_parallel(to_obj_fn(_test_parser_dynamic(), gray_multi_seq_sample_fitness_fn(wanted; state_bits=state_bits)))
+
+  obj_fn = _objective_fn_parallel(_test_obj_fn())
 
   ga = GA(
     N=pop_size, information=information, options=options, p_mutation=p_mutation
@@ -280,8 +300,10 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
 end
 
 function get_best_at(fn, opt_result, parser)
-  all_fitnesses = Folds.map(to_obj_fn(parser, fn), map(x -> x.x, opt_result.population))
+  all_fitnesses = Folds.map(fn, map(x -> x.x, opt_result.population))
+  @info "get_best_at" extrema(all_fitnesses)
   _min = minimum(all_fitnesses)
   best_idx = findfirst(≈(_min), all_fitnesses)
+  @info "get_best_at" length(all_fitnesses), _min, best_idx
   opt_result.population[best_idx].x
 end
