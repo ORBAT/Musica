@@ -39,15 +39,15 @@ end
 @inline _normalize_num(n, max_val) = n / max_val
 
 function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=@£(_normalize_num(2^_row_width() - 1)) ∘ row_from_gray)
-  function fitness_fn(wanted, result)
+  @inline function fitness_fn(wanted, result)
     _wanted = wanted |> maybe_collect
     _result = result |> Map(output_mapper) |> maybe_collect
     fn(_wanted, _result)
   end
 end
 
-@inline function create_obj_fn(genotype_parser_fn, input_data_gen_fn, result_gen_fn, fitness_fn)
-  return function obj_fn(bits)
+function create_obj_fn(genotype_parser_fn, input_data_gen_fn, result_gen_fn, fitness_fn)
+  @inline return function obj_fn(bits)
     (wanted, input) = input_data_gen_fn()
     # HUOM: _ on ylijääneet bitit
     (_, indiv) = bits |> genotype_parser_fn
@@ -59,24 +59,29 @@ end
 # gray_inp_out(w::Type{Val{width}}=Val{16}) where {width} = @£(num_to_gray_row(w)), (@£(_normalize_num(2^width - 1)) ∘ row_from_gray)
 
 function input_based_result_gen(input_mapper=@£(num_to_gray_row(Val{_row_width()})))
-  function _input_based_result_gen(input, indiv)
+  @inline function _input_based_result_gen(input, indiv)
     input |> Map(indiv ∘ input_mapper)
   end
 end
 
 function full_data_generator(wanted::T) where {T<:AbstractArray}
-  function _full_data_generator()
+  @inline function _full_data_generator()
     (wanted, 1:length(wanted))
   end
 end
 
-function sampled_data_generator(wanted::T; sequence_len=2, n_samples=6, rng=Random.default_rng()) where {T<:AbstractArray}
+function sampled_data_generator(wanted::T; sequence_len=5, n_samples=4, rng=nothing) where {T<:AbstractArray}
   start_idx_range = 1:(length(wanted)-(sequence_len-1))
   _n_samples = min(length(start_idx_range), n_samples)
   to_ranges = MapCat(start_idx -> start_idx:start_idx+(sequence_len-1)) |> Unique()
   # NOTE: palauttaa (wanted, input)
-  function _sampled_data_generator()
-    start_idxs = rand(rng, start_idx_range, _n_samples)
+  @inline function _sampled_data_generator()
+    _rng = if isnothing(rng)
+      Random.default_rng()
+    else
+      rng
+    end
+    start_idxs = rand(_rng, start_idx_range, _n_samples)
     idxs = start_idxs |> to_ranges
     ((wanted,) |> MapCat(w -> w[idxs|>collect]), idxs)
   end
@@ -126,14 +131,14 @@ end
 ##    inp |> input_mapper |> indiv |> ouput_mapper |> fitness_fn
 
 @inline function _obj_fn_to_parallel(fn::Function)
-  function objfn_par(input)
+  @inline function objfn_par(input)
     Folds.map(fn, eachrow(input))
   end
 end
 
 _row_width()::Int = 16
-_bits_per_generation()::Int = 9
-_pop_size()::Int = 10
+_bits_per_generation()::Int = 7
+_pop_size()::Int = 500
 _bits_per_stack_size()::Int = 4
 
 _StackType() = CANeuronStack{32,2,_row_width()}
@@ -146,7 +151,7 @@ _test_parser_dynamic() = parser(CANeuronStack;
 )
 _test_parser_bits_required() = parser_bits_required(_StackType(); bits_per_gen=_bits_per_generation())
 
-_test_parser_bits_required_dyn() = Musica.parser_bits_required(CANeuronStack{2^_bits_per_stack_size(),2,_row_width()}; bits_per_gen=_bits_per_generation()) + 10
+_test_parser_bits_required_dyn() = Musica.parser_bits_required(CANeuronStack; bits_per_gen=_bits_per_generation(), bits_per_stack_size=_bits_per_stack_size())
 
 
 _test_wanted_output(num_cycles=3, scale_factor=2) = _normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
@@ -175,7 +180,7 @@ Metaheuristics.stop_check(population, criteria::_Neverstop) = false
   sampled_result_generator(_test_wanted_output(6)),
   Musica.make_fitness_function())
  =#
-function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4)
+function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4, termination=Metaheuristics.RelativeFunctionConvergence())
 
   pop_size = _pop_size()
 
@@ -197,11 +202,12 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
   ga = GA(
     N=pop_size, information=information, options=options, p_mutation=p_mutation
     # HUOM: N ehkä syytä olla == pop_size? Essentials of Metaheuristics vähän antais ymmärtää näin (Algorithm 32, sivu 45)
-    , selection=TournamentSelection(K=2, N=pop_size), termination=Metaheuristics.RelativeFunctionConvergence()
+    , selection=TournamentSelection(K=2, N=pop_size)
     ## HOX: GenerationalReplacement ei vittu toimi jos tourn N>pop_size
     # , environmental_selection=Metaheuristics.GenerationalReplacement()
     , environmental_selection=Metaheuristics.ElitistReplacement()
-    # ; termination=_Neverstop()
+    # , termination=_Neverstop()
+    , termination=termination
   )
 
   num_bits = _test_parser_bits_required_dyn()
@@ -211,7 +217,7 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
     , input_based_result_gen()
     , create_fitness_fn()
   )
-  
+
   # Metaheuristics.set_user_solutions!(ga, ones(Bool, num_bits), obj_fn)
 
   optimize(_obj_fn_to_parallel(obj_fn), BitArraySpace(num_bits), ga)
