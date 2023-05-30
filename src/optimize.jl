@@ -38,10 +38,10 @@ end
 
 @inline normalize_num(n, max_val) = n / max_val
 
-function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=@£(normalize_num(2^_row_width() - 1)) ∘ row_from_gray)
+function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=Map(@£(normalize_num(2^_row_width() - 1)) ∘ row_from_gray))
   @inline function fitness_fn(wanted, result)
     _wanted = wanted |> maybe_collect
-    _result = result |> Map(output_mapper) |> maybe_collect
+    _result = result |> output_mapper |> maybe_collect
     fn(_wanted, _result)
   end
 end

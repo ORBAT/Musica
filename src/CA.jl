@@ -215,7 +215,7 @@ Return a `Row{2,N}` that contains `n` 1's. Little-endian, padded to length `N`
 
 ```jldoctest
 julia> Musica.num_to_ones(6, Val{8})
-8-element Row{2, 8, Int64, Vector{Int64}}:
+8-element Row{2, 8, Bool, Vector{Bool}}:
  1
  1
  1
@@ -227,8 +227,8 @@ julia> Musica.num_to_ones(6, Val{8})
 ```
 """
 @inline function num_to_ones(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
-  @assert 0 ≤ n < BigInt(2)^L "n must be positive and smaller than 2^L ($(2^L)), was $n"
-  Row{2,L}(digits(BigInt(2)^n - 1; base=2, pad=L))
+  @assert 0 ≤ n < L "n must be positive and smaller than L ($L), was $n"
+  Row{2,L}([ones(Bool,n); zeros(Bool, L-n)])
 end
 
 @inline function num_to_row(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
