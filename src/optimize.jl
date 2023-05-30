@@ -1,4 +1,4 @@
-using GrayCode, TestItems, Test, Folds, Metaheuristics, StatsBase
+using GrayCode, TestItems, Test, Folds, Metaheuristics, StatsBase, Random
 
 """
     _normalize(v)
@@ -38,7 +38,7 @@ end
 
 @inline _normalize_num(n, max_val) = n / max_val
 
-function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=@£(_normalize_num(2^16-1)) ∘ row_from_gray)
+function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=@£(_normalize_num(2^_row_width() - 1)) ∘ row_from_gray)
   function fitness_fn(wanted, result)
     _wanted = wanted |> maybe_collect
     _result = result |> Map(output_mapper) |> maybe_collect
@@ -58,7 +58,7 @@ end
 
 # gray_inp_out(w::Type{Val{width}}=Val{16}) where {width} = @£(num_to_gray_row(w)), (@£(_normalize_num(2^width - 1)) ∘ row_from_gray)
 
-function input_based_result_gen(input_mapper=num_to_gray_row(Val{16}))
+function input_based_result_gen(input_mapper=@£(num_to_gray_row(Val{_row_width()})))
   function _input_based_result_gen(input, indiv)
     input |> Map(indiv ∘ input_mapper)
   end
@@ -70,9 +70,7 @@ function full_data_generator(wanted::T) where {T<:AbstractArray}
   end
 end
 
-using Random
-
-function sampled_data_generator(wanted::T; sequence_len=3, n_samples=6, rng=Random.default_rng()) where {T<:AbstractArray}
+function sampled_data_generator(wanted::T; sequence_len=2, n_samples=6, rng=Random.default_rng()) where {T<:AbstractArray}
   start_idx_range = 1:(length(wanted)-(sequence_len-1))
   _n_samples = min(length(start_idx_range), n_samples)
   to_ranges = MapCat(start_idx -> start_idx:start_idx+(sequence_len-1)) |> Unique()
@@ -80,7 +78,7 @@ function sampled_data_generator(wanted::T; sequence_len=3, n_samples=6, rng=Rand
   function _sampled_data_generator()
     start_idxs = rand(rng, start_idx_range, _n_samples)
     idxs = start_idxs |> to_ranges
-    ((wanted,) |> MapCat(w -> w[idxs |> collect]), idxs)
+    ((wanted,) |> MapCat(w -> w[idxs|>collect]), idxs)
   end
 end
 
@@ -127,7 +125,7 @@ end
 ##    (_, indiv) = bits |> genotype_parser
 ##    inp |> input_mapper |> indiv |> ouput_mapper |> fitness_fn
 
-@inline function _objective_fn_parallel(fn::Function)
+@inline function _obj_fn_to_parallel(fn::Function)
   function objfn_par(input)
     Folds.map(fn, eachrow(input))
   end
@@ -135,7 +133,7 @@ end
 
 _row_width()::Int = 16
 _bits_per_generation()::Int = 7
-_pop_size()::Int = 200
+_pop_size()::Int = 1200
 _bits_per_stack_size()::Int = 5
 
 _test_wanted_output(num_cycles=3, scale_factor=2) = _normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
@@ -165,18 +163,17 @@ _test_parser_bits_required_dyn() = Musica.parser_bits_required(CANeuronStack{2^_
 
 struct _Neverstop <: Metaheuristics.AbstractTermination end
 
-function Metaheuristics.stop_check(population, criteria::_Neverstop)
-  false
-end
+Metaheuristics.stop_check(population, criteria::_Neverstop) = false
+
 
 # function Metaheuristics.default_stop_check(status, information, options)
 #   Metaheuristics.time_stop_check(status, information, options)
 # end
 
-_test_obj_fn() = to_obj_fn(_test_parser_dynamic(),
+#= _test_obj_fn() = to_obj_fn(_test_parser_dynamic(),
   sampled_result_generator(_test_wanted_output(6)),
   Musica.make_fitness_function())
-
+ =#
 function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4)
 
   pop_size = _pop_size()
@@ -194,7 +191,7 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
   # wanted = _test_wanted_output(6)
   # obj_fn = _objective_fn_parallel(to_obj_fn(_test_parser_dynamic(), gray_multi_seq_sample_fitness_fn(wanted; state_bits=state_bits)))
 
-  obj_fn = _objective_fn_parallel(_test_obj_fn())
+  # obj_fn = _objective_fn_parallel(_test_obj_fn())
 
   ga = GA(
     N=pop_size, information=information, options=options, p_mutation=p_mutation
@@ -206,16 +203,21 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
     # ; termination=_Neverstop()
   )
 
-  num_bits = _test_parser_bits_required_dyn() #Musica.parser_bits_required(_Stack; bits_per_gen=bpg)
-
-  optimize(obj_fn, BitArraySpace(num_bits), ga)
+  num_bits = _test_parser_bits_required_dyn()
+  obj_fn = create_obj_fn(
+    _test_parser_dynamic()
+    , sampled_data_generator(_test_wanted_output(6))
+    , input_based_result_gen()
+    , create_fitness_fn()
+  )
+  optimize(_obj_fn_to_parallel(obj_fn), BitArraySpace(num_bits), ga)
 end
 
 function get_best_at(fn, opt_result, parser)
   all_fitnesses = Folds.map(fn, map(x -> x.x, opt_result.population))
-  @info "get_best_at" extrema(all_fitnesses)
+  # @info "get_best_at" extrema(all_fitnesses)
   _min = minimum(all_fitnesses)
   best_idx = findfirst(≈(_min), all_fitnesses)
-  @info "get_best_at" length(all_fitnesses), _min, best_idx
+  # @info "get_best_at" length(all_fitnesses), _min, best_idx
   opt_result.population[best_idx].x
 end
