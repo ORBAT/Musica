@@ -67,17 +67,28 @@ end
 
 @inline Base.IndexStyle(::Type{Row{NS,L,T,C}}) where {NS,L,T,C} = Base.IndexStyle(C)
 
+@inline function Base.similar(r::Row{NStates,Len,T,C}) where {NStates,Len,T,C<:SizedVector}
+  # TODO FIXME: tää riippuu SizedVectorin sisuskaluista. Jos tätä kikkailua ei tee, niin BitVectorin kanssa lopputulos on
+  # SizedVector{Len, Bool, Vector{Bool}} eikä SizedVector{Len, Bool, BitVector}
+  c = similar(r.coll.data)
+  # @debug "Base.similar(Row) with SizedVector r.coll=$(typeof(r.coll)) c=$(typeof(c))"
+  Row{NStates,Len}(SizedVector{Len}(c))
+end
+
 @inline function Base.similar(r::Row{NStates,Len,T,C}) where {NStates,Len,T,C}
   c = similar(r.coll)
+  # @debug "Base.similar(Row) r.coll=$(typeof(r.coll)) c=$(typeof(c))"
   Row{NStates,Len}(c)
 end
 
-@inline function Base.similar(r::Row{NStates,Len,T,C}, dims::Int...) where {NStates,Len,T,C}
+#TODO: tarviiks?
+#= @inline function Base.similar(r::Row{NStates,Len,T,C}, dims::Int...) where {NStates,Len,T,C}
   @assert foldl(*, dims) == Len "dims gives a length of $(foldl(*,dims)) but Len was $Len"
   c = similar(r.coll, dims...)
   Row{NStates,Len}(c)
 end
-
+ =#
+ 
 @testitem "Row" begin
   using StaticArrays
   bv = SizedVector{4}(BitVector(ones(Bool, 4)))
