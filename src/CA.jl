@@ -251,7 +251,9 @@ Interpret a `Row` as being a Gray-coded integer
 
 @inline num_to_gray(x) = (x ⊻ (x >> 1))
 
-@inline num_to_gray_row(x, width=Val{16}) = x |> num_to_gray |> @£ num_as_row(width)
+@inline num_to_gray_row(x, ::Type{Val{width}}) where {width} = x |> num_to_gray |> @£ num_as_row(width)
+@inline num_to_gray_row(x, width::Int) = num_to_gray_row(x, Val{width})
+@inline num_to_gray_row(x) = num_to_gray_row(x, Val{16})
 
 @testitem "gray coding" begin
   row_width = Val{5}
