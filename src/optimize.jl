@@ -1,25 +1,25 @@
 using GrayCode, TestItems, Test, Folds, Metaheuristics, StatsBase, Random
 
 """
-    _normalize(v)
+    normalize(v)
 
 Normalize `x` so that all of its values are between 0.0 and 1.0.
 
 ```jldoctest
-julia> Musica._normalize([0 10 5])
+julia> Musica.normalize([0 10 5])
 1×3 Matrix{Float64}:
  0.0  1.0  0.5
 
-julia> Musica._normalize([0 0 0])
+julia> Musica.normalize([0 0 0])
 1×3 Matrix{Float64}:
  0.0  0.0  0.0
 
-julia> Musica._normalize([5 5 5])
+julia> Musica.normalize([5 5 5])
 1×3 Matrix{Float64}:
  1.0  1.0  1.0
 ```
 """
-function _normalize(x)
+function normalize(x)
   (_min, _max) = extrema(x)
   if 0 == _min == _max
     return zeros(Float64, size(x))
@@ -36,9 +36,9 @@ end
 @inline _right((_, r)) = r
 @inline _right(_, r) = r
 
-@inline _normalize_num(n, max_val) = n / max_val
+@inline normalize_num(n, max_val) = n / max_val
 
-function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=@£(_normalize_num(2^_row_width() - 1)) ∘ row_from_gray)
+function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=@£(normalize_num(2^_row_width() - 1)) ∘ row_from_gray)
   @inline function fitness_fn(wanted, result)
     _wanted = wanted |> maybe_collect
     _result = result |> Map(output_mapper) |> maybe_collect
@@ -154,14 +154,14 @@ _test_parser_bits_required() = parser_bits_required(_StackType(); bits_per_gen=_
 _test_parser_bits_required_dyn() = Musica.parser_bits_required(CANeuronStack; bits_per_gen=_bits_per_generation(), bits_per_stack_size=_bits_per_stack_size())
 
 
-_test_wanted_output(num_cycles=3, scale_factor=2) = _normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
-_test_wanted_output_cos(num_cycles=3, scale_factor=2) = _normalize([cos(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
-_test_wanted_output_tan(num_cycles=3, scale_factor=2) = _normalize([tan(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
+_test_wanted_output(num_cycles=3, scale_factor=2) = normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
+_test_wanted_output_cos(num_cycles=3, scale_factor=2) = normalize([cos(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
+_test_wanted_output_tan(num_cycles=3, scale_factor=2) = normalize([tan(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
 
 ## NOTE: tällä hetkellä tää on yllättävän hyvä optimoimaan tätä. CANeuronStack{29}, row_width = 16, bits_per_gen = 3
 function _test_wanted_output_rastr(D=10, step=0.5)
   rastr(x) = 10D + sum(x .* x - 10cos.(2π * x))
-  _normalize([rastr(x) for x = -5:step:5])
+  normalize([rastr(x) for x = -5:step:5])
 end
 
 

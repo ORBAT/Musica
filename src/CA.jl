@@ -209,12 +209,12 @@ end
 @inline parser_bits_required(::Type{<:DiscreteCA{2}}; kw...) = 8
 
 """
-    Musica.num_as_ones(n, Val{N})
+    Musica.num_to_ones(n, Val{N})
 
 Return a `Row{2,N}` that contains `n` 1's. Little-endian, padded to length `N`
 
 ```jldoctest
-julia> Musica.num_as_ones(6, Val{8})
+julia> Musica.num_to_ones(6, Val{8})
 8-element Row{2, 8, Int64, Vector{Int64}}:
  1
  1
@@ -226,23 +226,26 @@ julia> Musica.num_as_ones(6, Val{8})
  0
 ```
 """
-@inline function num_as_ones(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
+@inline function num_to_ones(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
   @assert 0 ≤ n < BigInt(2)^L "n must be positive and smaller than 2^L ($(2^L)), was $n"
   Row{2,L}(digits(BigInt(2)^n - 1; base=2, pad=L))
 end
 
-@inline function num_as_row(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
+@inline function num_to_row(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
   Row{2,L}(digits(n; base=2, pad=L))
 end
 
 @inline count_ones(r::Row)::Int = sum(filter(==(1), r))
 
-@testitem "num_as_ones" begin
-  @test_throws AssertionError Musica.num_as_ones(-1, Val{8})
-  @test_throws AssertionError Musica.num_as_ones(256, Val{8})
+@testitem "num_to_ones" begin
+  @test_throws AssertionError Musica.num_to_ones(-1, Val{8})
+  @test_throws AssertionError Musica.num_to_ones(256, Val{8})
 end
 
 @inline num_from_gray(n) = UInt(Integer(reinterpret(Gray64, n)))
+
+@inline row_to_number(r::Row{2}) = r |> Musica.undigits
+@inline row_to_number(r::Row{N}) where {N} = r |> @£(Musica.undigits(N))
 
 """
 Interpret a `Row` as being a Gray-coded integer
@@ -251,14 +254,14 @@ Interpret a `Row` as being a Gray-coded integer
 
 @inline num_to_gray(x) = (x ⊻ (x >> 1))
 
-@inline num_to_gray_row(x, w::Type{Val{width}}) where {width} = x |> num_to_gray |> @£ num_as_row(w)
+@inline num_to_gray_row(x, w::Type{Val{width}}) where {width} = x |> num_to_gray |> @£ num_to_row(w)
 @inline num_to_gray_row(x, width::Int) = num_to_gray_row(x, Val{width})
 @inline num_to_gray_row(x) = num_to_gray_row(x, Val{16})
 
 @testitem "gray coding" begin
   row_width = Val{5}
-  @test Musica.row_from_gray(Musica.num_as_row(5, row_width)) == 6
-  @test Musica.row_from_gray(Musica.num_as_row(10, row_width)) == 12
-  @test Musica.row_from_gray(Musica.num_as_row(1, row_width)) == 1
-  @test Musica.num_to_gray_row(12, row_width) == Musica.num_as_row(10, row_width)
+  @test Musica.row_from_gray(Musica.num_to_row(5, row_width)) == 6
+  @test Musica.row_from_gray(Musica.num_to_row(10, row_width)) == 12
+  @test Musica.row_from_gray(Musica.num_to_row(1, row_width)) == 1
+  @test Musica.num_to_gray_row(12, row_width) == Musica.num_to_row(10, row_width)
 end
