@@ -19,13 +19,13 @@ end
 
 new_state(v::Integer) = new_state(Val(v))
 
-test_state=new_state(Val{32})
-n_generations=40
+test_state=new_state(Val{16})
+n_generations=5
 
 test_ca = DiscreteCA{2}(110)
 test_ca2 = DiscreteCA{2,1}(54)
 
-test_can = CANeuron{2,32}(test_ca, n_generations)
-test_can2 = CANeuron{2,32}(test_ca2, Int(floor(n_generations/2)))
+test_can = CANeuron{2,16}(test_ca, n_generations)
+test_can2 = CANeuron{2,16}(test_ca2, Int(floor(n_generations/2)))
 
-test_stack = CANeuronStack{2,2,32}(test_can,test_can2)
+test_stack = CANeuronStack{2,2,16}(test_can,test_can2)
