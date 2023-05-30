@@ -132,19 +132,9 @@ end
 end
 
 _row_width()::Int = 16
-_bits_per_generation()::Int = 7
-_pop_size()::Int = 1200
-_bits_per_stack_size()::Int = 5
-
-_test_wanted_output(num_cycles=3, scale_factor=2) = _normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
-_test_wanted_output_cos(num_cycles=3, scale_factor=2) = _normalize([cos(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
-_test_wanted_output_tan(num_cycles=3, scale_factor=2) = _normalize([tan(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
-
-## NOTE: tällä hetkellä tää on yllättävän hyvä optimoimaan tätä. CANeuronStack{29}, row_width = 16, bits_per_gen = 3
-function _test_wanted_output_rastr(D=10, step=0.5)
-  rastr(x) = 10D + sum(x .* x - 10cos.(2π * x))
-  _normalize([rastr(x) for x = -5:step:5])
-end
+_bits_per_generation()::Int = 9
+_pop_size()::Int = 10
+_bits_per_stack_size()::Int = 4
 
 _StackType() = CANeuronStack{32,2,_row_width()}
 
@@ -157,6 +147,17 @@ _test_parser_dynamic() = parser(CANeuronStack;
 _test_parser_bits_required() = parser_bits_required(_StackType(); bits_per_gen=_bits_per_generation())
 
 _test_parser_bits_required_dyn() = Musica.parser_bits_required(CANeuronStack{2^_bits_per_stack_size(),2,_row_width()}; bits_per_gen=_bits_per_generation()) + 10
+
+
+_test_wanted_output(num_cycles=3, scale_factor=2) = _normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
+_test_wanted_output_cos(num_cycles=3, scale_factor=2) = _normalize([cos(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
+_test_wanted_output_tan(num_cycles=3, scale_factor=2) = _normalize([tan(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
+
+## NOTE: tällä hetkellä tää on yllättävän hyvä optimoimaan tätä. CANeuronStack{29}, row_width = 16, bits_per_gen = 3
+function _test_wanted_output_rastr(D=10, step=0.5)
+  rastr(x) = 10D + sum(x .* x - 10cos.(2π * x))
+  _normalize([rastr(x) for x = -5:step:5])
+end
 
 
 ## HUOM: _Neverstop ja default_stop_check-metodi on klugeja joilla yritän estää vitun Metaheuristicsia luovuttamasta kesken kaiken
@@ -210,14 +211,15 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
     , input_based_result_gen()
     , create_fitness_fn()
   )
+  
+  # Metaheuristics.set_user_solutions!(ga, ones(Bool, num_bits), obj_fn)
+
   optimize(_obj_fn_to_parallel(obj_fn), BitArraySpace(num_bits), ga)
 end
 
-function get_best_at(fn, opt_result, parser)
+function get_best_at(fn, opt_result)
   all_fitnesses = Folds.map(fn, map(x -> x.x, opt_result.population))
-  # @info "get_best_at" extrema(all_fitnesses)
   _min = minimum(all_fitnesses)
   best_idx = findfirst(≈(_min), all_fitnesses)
-  # @info "get_best_at" length(all_fitnesses), _min, best_idx
   opt_result.population[best_idx].x
 end
