@@ -10,7 +10,7 @@ struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
   function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, gens::Integer) where {NStates,Width}
     _g = if gens ≤ 0
       Int(1)
-    else 
+    else
       Int(gens)
     end
     new(ca, repeated(ca, _g), _g)
@@ -23,7 +23,7 @@ end
 end
 
 @inline function Base.:(==)(a::CANeuron{N1,W1}, b::CANeuron{N2,W2}) where {N1,W1,N2,W2}
-  isequal(N1, N2) && isequal(W1, W2) &&  isequal(a.generations, b.generations) && isequal(a.ca, b.ca)
+  isequal(N1, N2) && isequal(W1, W2) && isequal(a.generations, b.generations) && isequal(a.ca, b.ca)
 end
 
 ## 
@@ -138,7 +138,7 @@ end
 Return the *maximum* number of bits required for a `CANeuronStack` when the maximum number of `CANeuron`s is `2^bits_per_stack_size`
 """
 function parser_bits_required(::Type{<:CANeuronStack}; bits_per_stack_size::Int, kw...)
-  2^bits_per_stack_size * parser_bits_required(CANeuron{2}; kw...)
+  bits_per_stack_size + 2^bits_per_stack_size * parser_bits_required(CANeuron{2}; kw...)
 end
 
 function parser(::Type{<:CANeuronStack{S,2,W}}; kw...) where {S,W}
@@ -156,10 +156,7 @@ end
 function parser(::Type{<:CANeuronStack}; bits_per_stack_size=5, state_width=16, kw...)
   Parser() do bits
     bitsleft, _stack_size = bits |> @£(parse_n_bits(bits_per_stack_size))
-    stack_size::Int = Int(_stack_size)
-    if stack_size == 0
-      stack_size = 1
-    end
+    stack_size::Int = Int(_stack_size) + 1
 
     out = Vector{CANeuron{2,state_width}}(undef, Int(stack_size))
     can_parser = Musica.parser(CANeuron{2,state_width}; kw...)
@@ -197,6 +194,7 @@ end
   rule1 = 110
   rule2 = 30
   const _bits_per_gen = 5
+  const _bits_per_stack_size = 2
   n_generations1 = 5
   n_generations2 = 20
 
@@ -206,15 +204,15 @@ end
   ca2_bits = digits(rule2; base=2, pad=8)
   can1_bits = BitVector(vcat(gen_bits1, ca1_bits))
   can2_bits = BitVector(vcat(gen_bits2, ca2_bits))
-  stack_size_bits = digits(2; base=2, pad=2)
+  stack_size_bits = digits(1; base=2, pad=_bits_per_stack_size)
   full_bits = vcat(stack_size_bits, can1_bits, can2_bits)
 
   test_can1 = CANeuron{2,32}(DiscreteCA{2}(110), n_generations1)
   test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_generations2)
 
-  p = Musica.parser(CANeuronStack; bits_per_gen=_bits_per_gen, bits_per_stack_size=2, state_width=32)
-  
-  @test Musica.parser_bits_required(CANeuronStack; bits_per_stack_size=2) == 4 * Musica.parser_bits_required(CANeuron{2})
-  
+  p = Musica.parser(CANeuronStack; bits_per_gen=_bits_per_gen, bits_per_stack_size=_bits_per_stack_size, state_width=32)
+
+  @test Musica.parser_bits_required(CANeuronStack; bits_per_stack_size=2, bits_per_gen=2) == 4 * Musica.parser_bits_required(CANeuron{2}, bits_per_gen=2) + _bits_per_stack_size
+
   @test p(full_bits) == (Bool[], CANeuronStack{2}(test_can1, test_can2))
 end
