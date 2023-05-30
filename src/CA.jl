@@ -165,7 +165,7 @@ Returns an [eduction](https://juliafolds.github.io/Transducers.jl/stable/referen
   @inbounds @views state[idxs]
 end
 
-@inline neighborhood_size(::Type{DiscreteCA{NS,RD,RuL}}) where {NS,RD,RuL} = RD * 2 + 1
+@inline neighborhood_size(::Type{<:DiscreteCA{NS,RD}}) where {NS,RD} = RD * 2 + 1
 
 """Return a transducer that applies the CA's rule.
 
@@ -202,7 +202,7 @@ Treat d as a little-endian vector of digits in `base` and return the base-10 rep
 julia> Musica.undigits([0, 1, 1, 1, 1, 0, 0, 0])
 0x000000000000001e
 
-julia> Musica.undigits(Musica.rule_to_rule_lookup(UInt(22), 3), 3)
+julia> Musica.undigits(Musica.rule_to_rule_lookup(22, 3), 3)
 0x0000000000000016
 
 julia> Musica.undigits([])
@@ -218,7 +218,7 @@ Return a little-endian vector for the transition rule padded to the max rule len
 Eg. for radius=1 nstates=2, index 1 is the result for 000, index 1 is for 001 etc.
 
 ```jldoctest
-julia> x = Musica.rule_to_rule_lookup(UInt(30));
+julia> x = Musica.rule_to_rule_lookup(30);
 
 julia> show(x)
 [0, 1, 1, 1, 1, 0, 0, 0]
@@ -227,13 +227,13 @@ julia> show(x)
 
 See also [`undigits`](@ref)
 """
-@inline function rule_to_rule_lookup(rule::UInt, nstates::Int=2, radius::Int=1)
+@inline function rule_to_rule_lookup(rule::Integer, nstates::Int=2, radius::Int=1)
   RuleLen = nstates^(2 * radius + 1)
   SVector{RuleLen,Int}(digits(Int, rule; base=nstates, pad=RuleLen))
 end
 
 @testitem "Rule number to rule lookup array" begin
-  @test Musica.rule_to_rule_lookup(UInt(22), 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
+  @test Musica.rule_to_rule_lookup(22, 3) == [[1, 1, 2]; zeros(Int, 27 - 3)]
 end
 
 @inline function parser(::Type{DiscreteCA{2}}; kw...)
