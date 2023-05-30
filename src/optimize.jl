@@ -70,6 +70,8 @@ function full_data_generator(wanted::T) where {T<:AbstractArray}
   end
 end
 
+@inline _mask_wanted_with_idxs(idxs) = wanted -> (wanted,) |> MapCat(w -> w[idxs|>collect])
+
 function sampled_data_generator(wanted::T; sequence_len=5, n_samples=4, rng=nothing) where {T<:AbstractArray}
   start_idx_range = 1:(length(wanted)-(sequence_len-1))
   _n_samples = min(length(start_idx_range), n_samples)
@@ -83,7 +85,8 @@ function sampled_data_generator(wanted::T; sequence_len=5, n_samples=4, rng=noth
     end
     start_idxs = rand(_rng, start_idx_range, _n_samples)
     idxs = start_idxs |> to_ranges
-    ((wanted,) |> MapCat(w -> w[idxs|>collect]), idxs)
+    masked_wanted = (wanted,) |> MapCat(w -> w[idxs|>collect])
+    (masked_wanted, idxs)
   end
 end
 
@@ -184,8 +187,6 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
 
   pop_size = pop_size
 
-  state_bits = _row_width()
-
   information = Information(f_optimum=0.0)
   options = Options(f_tol=eps(),
     time_limit=time_limit,
@@ -212,7 +213,7 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
 
   num_bits = _test_parser_bits_required_dyn()
   obj_fn = create_obj_fn(
-    _test_parser_dynamic()
+    parser
     , sampled_data_generator(_test_wanted_output(6))
     , input_based_result_gen()
     , create_fitness_fn()
