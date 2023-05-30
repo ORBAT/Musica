@@ -72,7 +72,7 @@ end
   hash(:DiscreteCA, h) |> @©(hash(N)) |> @©(hash(R)) |> @©(hash(a.rule))
 end
 
-@inline function Base.:(==)(a::DiscreteCA{N1,R1}, b::DiscreteCA{N2,R2}) where{N1,R1,N2,R2}
+@inline function Base.:(==)(a::DiscreteCA{N1,R1}, b::DiscreteCA{N2,R2}) where {N1,R1,N2,R2}
   isequal(N1, N2) && isequal(R1, R2) && isequal(a.rule, b.rule)
 end
 
