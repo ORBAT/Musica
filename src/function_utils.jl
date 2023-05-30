@@ -19,21 +19,22 @@ Compose `fn` with itself `times` times
   # sen composen kasaaminen (eli repeated_compose(fn,n) kutsu) kestää kauemmin ku mitä
   # repeated_fold
 
-  if times ≤ 30
+  if times ≤ 20
     repeated_compose(fn, times)
   else
-    repeated_fold(fn, times)
+    repeated_iter(fn, times)
   end
 end
 
+# HUOM: repeated_compose:n palauttama funkkari on reilusti nopeampi ku repeated_fold:in, mutta
+# sen composen kasaaminen kestää ***1000x*** kauemmin esim. jos times=30
 @inline repeated_compose(fn, times) = ∘(fill(fn, times)...)
 
 # # foldl takes a fn (acc, x). (fn ∘ _left) is (acc,_) -> fn(acc)
 # # this is basically just fn composed with itself `times` times (fn ∘ fn ∘ ... )
-@inline repeated_fold(fn, times) = (input) -> foldl((fn ∘ _left), 1:times; init=input)
-
-_left(a, _) = a
-
+@inline repeated_fold(fn, times) = (input) -> (@inline; foldl((fn ∘ _left), 1:times; init=input))
+@inline repeated_iter(fn, times) = inp -> (@inline; 1:times+1 |> Iterated(fn, inp) |> TakeLast(1) |> collect |> only)
+@inline _left(a, _) = a
 
 ######### HUOM: tää Base.Fix:in tuunaus ei välttis oo planeetan paras idea
 
@@ -214,13 +215,13 @@ function _curried(ex, Constructor)
     error("Function call had no arguments. Syntax: @© f(a, b; c = 1)")
   end
 
-  @debug fn args kws
+  # @debug fn args kws
 
   fn = esc(fn)
   args = map(esc, args)
   isnothing(kws) ? kws = Any[] : kws = map(esc, kws)
 
-  @debug "after esc" fn args kws
+  # @debug "after esc" fn args kws
 
   quote
     $Constructor($fn, $(args...); $(kws...))
