@@ -235,7 +235,7 @@ end
   Row{2,L}(digits(n; base=2, pad=L))
 end
 
-@inline count_ones(r::Row{2})::Int = sum(filter(==(1), r))
+@inline count_ones(r::Row)::Int = sum(filter(==(1), r))
 
 @testitem "num_as_ones" begin
   @test_throws AssertionError Musica.num_as_ones(-1, Val{8})
@@ -251,7 +251,7 @@ Interpret a `Row` as being a Gray-coded integer
 
 @inline num_to_gray(x) = (x ⊻ (x >> 1))
 
-@inline num_to_gray_row(x, ::Type{Val{width}}) where {width} = x |> num_to_gray |> @£ num_as_row(width)
+@inline num_to_gray_row(x, w::Type{Val{width}}) where {width} = x |> num_to_gray |> @£ num_as_row(w)
 @inline num_to_gray_row(x, width::Int) = num_to_gray_row(x, Val{width})
 @inline num_to_gray_row(x) = num_to_gray_row(x, Val{16})
 
