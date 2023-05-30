@@ -141,9 +141,9 @@ _bits_per_generation()::Int = 7
 _pop_size()::Int = 500
 _bits_per_stack_size()::Int = 4
 
-_StackType() = CANeuronStack{32,2,_row_width()}
+_StackType() = CANeuronStack{16,2,_row_width()}
 
-_test_parser() = Musica.parser(_StackType(); bits_per_gen=_bits_per_generation())
+_test_parser(;bits_per_gen=_bits_per_generation()) = Musica.parser(_StackType(); bits_per_gen=bits_per_gen)
 _test_parser_dynamic() = parser(CANeuronStack;
   bits_per_gen=_bits_per_generation(),
   bits_per_stack_size=_bits_per_stack_size(),
@@ -180,9 +180,9 @@ Metaheuristics.stop_check(population, criteria::_Neverstop) = false
   sampled_result_generator(_test_wanted_output(6)),
   Musica.make_fitness_function())
  =#
-function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4, termination=Metaheuristics.RelativeFunctionConvergence())
+function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4, termination=Metaheuristics.RelativeFunctionConvergence(), pop_size=_pop_size(),parser=_test_parser_dynamic())
 
-  pop_size = _pop_size()
+  pop_size = pop_size
 
   state_bits = _row_width()
 
