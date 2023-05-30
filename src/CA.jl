@@ -54,11 +54,11 @@ struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
 end
 
 function Base.show(io::IO, row::Row{NS,W}) where {NS,W}
-  print(io, "Row{",NS,",",W,"}(",row.coll,")")
+  print(io, "Row{", NS, ",", W, "}(", row.coll, ")")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", row::Row{NS,W}) where {NS,W}
-  print(io, "Row{",NS,",",W,"}(",row.coll,")")
+  print(io, "Row{", NS, ",", W, "}(", row.coll, ")")
 end
 
 #Row{NS,L,T}(coll) where {NS,L,T} = Row{NS,L,T,typeof(coll)}(coll)
@@ -157,6 +157,13 @@ Make `state` wrap around at the ends by prepending the `radius` last elements an
 Returns an [eduction](https://juliafolds.github.io/Transducers.jl/stable/reference/manual/#Transducers.eduction).
 """
 @inline _wrap_state(state, radius) = (@inbounds(@view(state[end-radius+1:end])), state, @inbounds(@view(state[1:radius]))) |> Cat()
+
+#HOX TODO: vaikka tää versio on ittessään vitusti nopeampi ku toi versio missä on Cat(), niin jotenkin ite CA on silti reilusti hitaampi jos tätä käyttää. MIKSI HÄ MITÄ VITTUA
+@inline function _wrap_state2(state, radius)
+  slen = length(state)
+  idxs = [slen-radius+1:slen; 1:slen; 1:radius]
+  @inbounds @views state[idxs]
+end
 
 @inline neighborhood_size(::Type{DiscreteCA{NS,RD,RuL}}) where {NS,RD,RuL} = RD * 2 + 1
 
