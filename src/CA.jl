@@ -10,48 +10,81 @@ Is a subtype of `AbstractVector` and should implement the whole interface for it
 struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
   coll::C
 
+  #TODO: ei ehkä tarvii näin monta inner constructoria? Järkeistä vähän
+
   """
   Create a new `Row` from a `StaticVector` or a `SizedVector`.
   """
-  function Row{NStates,Len,T,C}(c::C) where {NStates,Len,T,C<:Union{StaticVector{Len,T},SizedVector{Len,T}}}
-    new(c)
+  function Row{NStates}(c::C) where {NStates,Len,T,C<:Union{StaticVector{Len,T},SizedVector{Len,T}}}
+    @debug "Row{NStates} SizedVector"
+    new{NStates,Len,T,C}(c)
+  end
+
+  function Row{2}(c::C) where {Len,T,C<:Union{StaticVector{Len,T},SizedVector{Len,T}}}
+    @debug "Row{2} SizedVector{Len,T}" typeof(c)
+    new_c = SizedVector{Len}(BitVector(c))
+    new{2,Len,Bool,SizedVector{Len,Bool,BitVector}}(new_c)
+  end
+
+  function Row{2}(c::C) where {Len,C<:SizedVector{Len,Bool,BitVector}}
+    @debug "Row{2} SizedVector{Len,Bool,BitVector}" typeof(c)
+    new{2,Len,Bool,C}(c)
+  end
+
+  function Row{2,Len}(c::C) where {Len,C<:BitVector}
+    @debug "Row{2} bitvect constr"
+    @assert length(c) == Len "Tried to construct a Row with Len type parameter $Len, but with a collection of length $(length(c))"
+    new{2,Len,Bool,SizedVector{Len,Bool,BitVector}}(SizedVector{Len}(c))
+  end
+
+  function Row{2,Len}(c::C) where {Len,C<:AbstractArray}
+    @debug "Row{2} abstractarray constr"
+    @assert length(c) == Len "Tried to construct a Row with Len type parameter $Len, but with a collection of length $(length(c))"
+    new{2,Len,Bool,SizedVector{Len,Bool,BitVector}}(SizedVector{Len}(BitVector(c)))
   end
 
   """
   Create a new `Row` from any `AbstractArray` `c`. Checks that `c`'s length is equal to `Len`
   """
-  function Row{NStates,Len,T,C}(c::C) where {NStates,Len,T,C<:AbstractArray}
+  function Row{NStates,Len}(c::C) where {NStates,Len,T,C<:AbstractArray{T}}
+    @debug "Row generic constr"
     @assert length(c) == Len "Tried to construct a Row with Len type parameter $Len, but with a collection of length $(length(c))"
-    new(c)
+    new{NStates,Len,T,C}(c)
   end
 end
 
-Row{NS,L,T}(coll) where {NS,L,T} = Row{NS,L,T,typeof(coll)}(coll)
-Row{NS,L}(coll) where {NS,L} = Row{NS,L,Base.eltype(coll)}(coll)
-Row{NS}(coll::SV) where {NS,L,T,SV<:Union{StaticVector{L,T},SizedVector{L,T}}} = Row{NS,L,T,SV}(coll)
+function Base.show(io::IO, row::Row{NS,W}) where {NS,W}
+  print(io, "Row{",NS,",",W,"}(",row.coll,")")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", row::Row{NS,W}) where {NS,W}
+  print(io, "Row{",NS,",",W,"}(",row.coll,")")
+end
+
+#Row{NS,L,T}(coll) where {NS,L,T} = Row{NS,L,T,typeof(coll)}(coll)
+#Row{NS,L}(coll) where {NS,L} = Row{NS,L,Base.eltype(coll)}(coll)
+#Row{NS}(coll::SV) where {NS,L,T,SV<:Union{StaticVector{L,T},SizedVector{L,T}}} = Row{NS,L}(coll)
 
 @inline Base.IndexStyle(::Type{Row{NS,L,T,C}}) where {NS,L,T,C} = Base.IndexStyle(C)
 
 @inline function Base.similar(r::Row{NStates,Len,T,C}) where {NStates,Len,T,C}
   c = similar(r.coll)
-  Row{NStates,Len,T,typeof(c)}(c)
+  Row{NStates,Len}(c)
 end
 
 @inline function Base.similar(r::Row{NStates,Len,T,C}, dims::Int...) where {NStates,Len,T,C}
   @assert foldl(*, dims) == Len "dims gives a length of $(foldl(*,dims)) but Len was $Len"
   c = similar(r.coll, dims...)
-  Row{NStates,Len,T,typeof(c)}(c)
+  Row{NStates,Len}(c)
 end
 
-# conversions from one Row collection type to another (converts collection type from C to NC)
-@inline Base.convert(::Type{Row{NS,L,T,NC}}, r::R) where {NS,L,T,NC,C,R<:Row{NS,L,T,C}} = Row{NS,L,T,NC}(convert(NC, r.coll))
-# conversions from any AbstractArray to a Row
-# @inline Base.convert(::Type{Row{NS,L,T,C}}, c::C) where {NS,L,T,C<:AbstractArray} = Row{NS,L,T,C}(c)
-# @inline Base.convert(::Type{Row{NS,L,T}}, c::C) where {NS,L,T,C<:AbstractArray} = Row{NS,L,T,C}(c)
+@testitem "Row" begin
+  using StaticArrays
+  bv = SizedVector{4}(BitVector(ones(Bool, 4)))
+  # comparison with eg. Bool[]
+  @test Row{2}(bv) == Bool[1, 1, 1, 1]
 
-# @testitem "Row conversions" begin
-#   @test convert(Row{2,1,Int64,})
-# end
+end
 
 @forward Row.coll (Base.size, Base.getindex, Base.setindex!, Base.firstindex, Base.lastindex, Base.iterate,
   Base.length, Base.axes, eltype, Base.IteratorSize, Base.IteratorEltype)
@@ -215,20 +248,12 @@ Return a `Row{2,N}` that contains `n` 1's. Little-endian, padded to length `N`
 
 ```jldoctest
 julia> Musica.num_to_ones(6, Val{8})
-8-element Row{2, 8, Bool, Vector{Bool}}:
- 1
- 1
- 1
- 1
- 1
- 1
- 0
- 0
+Row{2,8}(Bool[1, 1, 1, 1, 1, 1, 0, 0])
 ```
 """
 @inline function num_to_ones(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
   @assert 0 ≤ n < L "n must be positive and smaller than L ($L), was $n"
-  Row{2,L}([ones(Bool,n); zeros(Bool, L-n)])
+  Row{2,L}([ones(Bool, n); zeros(Bool, L - n)])
 end
 
 @inline function num_to_row(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
