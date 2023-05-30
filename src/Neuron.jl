@@ -77,7 +77,7 @@ end
   @test p(extra_bits) == (BitVector(ca_bits), CANeuron{2,8}(DiscreteCA{2}(110), n_generations))
 end
 
-const CANeuronStack{S,N,W} = SVector{S,CANeuron{N,W}} where {S,N,W}
+const CANeuronStack{Size,NStates,StateWidth} = SVector{Size,CANeuron{NStates,StateWidth}} where {Size,NStates,StateWidth}
 
 function Base.show(io::IO, cas::CANeuronStack{Size,NStates,Width}) where {Size,NStates,Width}
   print(io, "CANeuronStack(Size=$Size,NStates=$NStates,Width=$Width)")
