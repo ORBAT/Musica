@@ -6,15 +6,15 @@ using GrayCode, TestItems, Test, Folds, Metaheuristics, StatsBase, Random
 Normalize `x` so that all of its values are between 0.0 and 1.0.
 
 ```jldoctest
-julia> Musica.normalize([0 10 5])
+julia> normalize([0 10 5])
 1×3 Matrix{Float64}:
  0.0  1.0  0.5
 
-julia> Musica.normalize([0 0 0])
+julia> normalize([0 0 0])
 1×3 Matrix{Float64}:
  0.0  0.0  0.0
 
-julia> Musica.normalize([5 5 5])
+julia> normalize([5 5 5])
 1×3 Matrix{Float64}:
  1.0  1.0  1.0
 ```
@@ -31,12 +31,15 @@ function normalize(x)
     (x .- _min) ./ _diff
   end
 end
+export normalize
 
 
 @inline _right((_, r)) = r
 @inline _right(_, r) = r
 
 @inline normalize_num(n, max_val) = n / max_val
+
+export normalize_num
 
 function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=Map(@£(normalize_num(2^_row_width() - 1)) ∘ row_from_gray))
   @inline function fitness_fn(wanted, result)
@@ -45,6 +48,8 @@ function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=Map(@£(normalize_nu
     fn(_wanted, _result)
   end
 end
+
+export create_fitness_fn
 
 function create_obj_fn(genotype_parser_fn, input_data_gen_fn, result_gen_fn, fitness_fn)
   @inline return function obj_fn(bits)
@@ -56,6 +61,8 @@ function create_obj_fn(genotype_parser_fn, input_data_gen_fn, result_gen_fn, fit
   end
 end
 
+export create_obj_fn
+
 # gray_inp_out(w::Type{Val{width}}=Val{16}) where {width} = @£(num_to_gray_row(w)), (@£(_normalize_num(2^width - 1)) ∘ row_from_gray)
 
 function input_based_result_gen(input_mapper=@£(num_to_gray_row(Val{_row_width()})))
@@ -64,19 +71,24 @@ function input_based_result_gen(input_mapper=@£(num_to_gray_row(Val{_row_width(
   end
 end
 
+export input_based_result_gen
+
 function full_data_generator(wanted::T) where {T<:AbstractArray}
   @inline function _full_data_generator()
     (wanted, 1:length(wanted))
   end
 end
 
-@inline _mask_wanted_with_idxs(idxs) = wanted -> (wanted,) |> MapCat(w -> w[idxs|>collect])
+export full_data_generator
 
-function sampled_data_generator(wanted::T; sequence_len=5, n_samples=4, rng=nothing) where {T<:AbstractArray}
+#HOX: sämpläys tuntuu antavan paskoja tuloksia aika herkästi sit kuitenkin, ainakin näin pienellä datasetillä.
+# HOX HOX: ehkä isommalla datasetillä ja sequence_len ≥ 30 vois olla ihan jees? Nykynen testidatasetti on 32 pitkä, ja full_data_generator:illa
+#   sai parem
+function sampled_data_generator(wanted::T; sequence_len=6, n_samples=3, rng=nothing) where {T<:AbstractArray}
   start_idx_range = 1:(length(wanted)-(sequence_len-1))
   _n_samples = min(length(start_idx_range), n_samples)
   to_ranges = MapCat(start_idx -> start_idx:start_idx+(sequence_len-1)) |> Unique()
-  # NOTE: palauttaa (wanted, input)
+  # HUOM: palauttaa (wanted, input)
   @inline function _sampled_data_generator()
     _rng = if isnothing(rng)
       Random.default_rng()
@@ -90,46 +102,13 @@ function sampled_data_generator(wanted::T; sequence_len=5, n_samples=4, rng=noth
   end
 end
 
+export sampled_data_generator
 
-#= @testitem "to_obj_fn(gen_parse_fn, res_gen_fn, fit_fn)" begin
-  using StaticArrays
-  indiv_bits = digits(110; base=2, pad=8)
-  _ca = Musica.DiscreteCA{2}(110)
-  _wanted = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-  function _parserfn(bits)
-    if bits == indiv_bits
-      (Int[], _ca)
-    else
-      (bits, nothing)
-    end
-  end
-
-  function _res_gen(input, indiv)
-    indiv(input)
-  end
-
-  function _fit_fn(wanted, rows)
-    rows == [wanted] ? 0.0 : 1.0
-  end
-
-  _TestStack = Musica.CANeuronStack{1,2,16}
-  _test_parser = Musica.parser(_TestStack; bits_per_gen=2)
-
-
-  #=   state = Row{2}(@SVector [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-  ca = DiscreteCA{2}(110)
-
-  @test ca(state) == [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-  @inferred(ca(state)) =#
-
-end
- =#
-
-## NOTE: näissä mun objective fn:issä yleensä osa joka ottaa input bitit ja tekee niistä jonkun fenotyypin (tässä tapauksessa 
+## HOX: näissä mun objective fn:issä yleensä osa joka ottaa input bitit ja tekee niistä jonkun fenotyypin (tässä tapauksessa 
 ## funktion), ja sit osa joka hieroo sitä training dataa (Map(num_to_gray_row)), ajaa sen sen fenotyypin läpi, ja sit hieroo 
 ## sitä fenotyypin outputtia (Map(@£ _normalize_num(state_max_val)))
 ##
-## NOTE NOTE: itse asiassa se on jotain suuntaan:
+## HOX HOX: itse asiassa se on jotain suuntaan:
 ##    (_, indiv) = bits |> genotype_parser
 ##    inp |> input_mapper |> indiv |> ouput_mapper |> fitness_fn
 
@@ -140,9 +119,10 @@ end
 end
 
 _row_width()::Int = 16
-_bits_per_generation()::Int = 7
+#HOX: jos _bits_per_generation > 5 niin tuntuu että laatu kärsii, resultit on lähinnä suoraa viivaa
+_bits_per_generation()::Int = 5
 _pop_size()::Int = 500
-_bits_per_stack_size()::Int = 4
+_bits_per_stack_size()::Int = 5
 
 _StackType() = CANeuronStack{16,2,_row_width()}
 
@@ -161,7 +141,7 @@ _test_wanted_output(num_cycles=3, scale_factor=2) = normalize([sin(x / scale_fac
 _test_wanted_output_cos(num_cycles=3, scale_factor=2) = normalize([cos(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
 _test_wanted_output_tan(num_cycles=3, scale_factor=2) = normalize([tan(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
 
-## NOTE: tällä hetkellä tää on yllättävän hyvä optimoimaan tätä. CANeuronStack{29}, row_width = 16, bits_per_gen = 3
+## HUOM: tällä hetkellä tää on yllättävän hyvä optimoimaan tätä. CANeuronStack{29}, row_width = 16, bits_per_gen = 3
 function _test_wanted_output_rastr(D=10, step=0.5)
   rastr(x) = 10D + sum(x .* x - 10cos.(2π * x))
   normalize([rastr(x) for x = -5:step:5])
@@ -183,7 +163,7 @@ Metaheuristics.stop_check(population, criteria::_Neverstop) = false
   sampled_result_generator(_test_wanted_output(6)),
   Musica.make_fitness_function())
  =#
-function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4, termination=Metaheuristics.RelativeFunctionConvergence(), pop_size=_pop_size(),parser=_test_parser_dynamic())
+function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4, termination=Metaheuristics.RelativeFunctionConvergence(), pop_size=_pop_size(),parser=_test_parser_dynamic(),with_indiv=nothing)
 
   pop_size = pop_size
 
@@ -214,12 +194,13 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
   num_bits = _test_parser_bits_required_dyn()
   obj_fn = create_obj_fn(
     parser
-    , sampled_data_generator(_test_wanted_output(6))
+    , full_data_generator(_test_wanted_output(5))
     , input_based_result_gen()
     , create_fitness_fn()
   )
-
-  # Metaheuristics.set_user_solutions!(ga, ones(Bool, num_bits), obj_fn)
+  if !isnothing(with_indiv)
+    Metaheuristics.set_user_solutions!(ga, with_indiv, obj_fn)
+  end
 
   optimize(_obj_fn_to_parallel(obj_fn), BitArraySpace(num_bits), ga)
 end
@@ -230,3 +211,5 @@ function get_best_at(fn, opt_result)
   best_idx = findfirst(≈(_min), all_fitnesses)
   opt_result.population[best_idx].x
 end
+
+export get_best_at

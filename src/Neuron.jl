@@ -12,7 +12,6 @@ struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
     _g = Int(gens)
     new(ca, repeated(ca, _g), _g)
   end
-
 end
 
 @inline function Base.hash(a::CANeuron{N,W}, h::UInt) where {N,W}
@@ -38,11 +37,11 @@ end
   can.repeated_ca_fn(state)
 end
 
-const default_bits_per_generation::Int = 5
+@inline bits_per_generation_default() = 5
 
-parser_bits_required(::Type{<:CANeuron{2}}; bits_per_gen=default_bits_per_generation, restkw...) = bits_per_gen + parser_bits_required(DiscreteCA{2}; restkw...)
+parser_bits_required(::Type{<:CANeuron{2}}; bits_per_gen=bits_per_generation_default(), restkw...) = bits_per_gen + parser_bits_required(DiscreteCA{2}; restkw...)
 
-@inline function parser(::Type{<:CANeuron{2,W}}; bits_per_gen=default_bits_per_generation) where {W}
+@inline function parser(::Type{<:CANeuron{2,W}}; bits_per_gen=bits_per_generation_default()) where {W}
   Parser() do bits
     bitsleft, generations = parse_n_bits(bits, bits_per_gen)
     bitsleft, ca = parser(DiscreteCA{2})(bitsleft)
@@ -217,3 +216,5 @@ end
 
   @test p(full_bits) == (Bool[], CANeuronStack{2}(test_can1, test_can2))
 end
+
+export CANeuron, CANeuronStack

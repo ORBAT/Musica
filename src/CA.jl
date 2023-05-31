@@ -1,5 +1,8 @@
 using Transducers, StaticArrays, TestItems, Test, Printf
 
+
+const _SizedTypes{Len, T} = Union{StaticVector{Len,T},SizedVector{Len,T}}
+
 """
     Row{NStates,Len,T,C<:AbstractArray}
 
@@ -12,15 +15,25 @@ struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
 
   #TODO: ei ehkä tarvii näin monta inner constructoria? Järkeistä vähän
 
+  function Row{NS,L,T,C}(c::C) where {NS,L,T,C<:AbstractArray}
+    @assert length(c) == L "Tried to construct a Row with Len type parameter $Len, but with a collection of length $(length(c))"
+    new{NS,L,T,C}(c)
+  end
+
+  function Row{NS,L,T,C}(c::C) where {NS,L,T,C<:_SizedTypes{L, T}}
+    new{NS,L,T,C}(c)
+  end
+
+
   """
   Create a new `Row` from a `StaticVector` or a `SizedVector`.
   """
-  function Row{NStates}(c::C) where {NStates,Len,T,C<:Union{StaticVector{Len,T},SizedVector{Len,T}}}
+  function Row{NStates}(c::C) where {NStates,Len,T,C<:_SizedTypes{Len, T}}
     # @debug "Row{NStates} SizedVector"
     new{NStates,Len,T,C}(c)
   end
 
-  function Row{2}(c::C) where {Len,T,C<:Union{StaticVector{Len,T},SizedVector{Len,T}}}
+  function Row{2}(c::C) where {Len,T,C<:_SizedTypes{Len, T}}
     # @debug "Row{2} SizedVector{Len,T}" typeof(c)
     new_c = SizedVector{Len}(BitVector(c))
     new{2,Len,Bool,SizedVector{Len,Bool,BitVector}}(new_c)
@@ -58,6 +71,8 @@ struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
   end
 end
 
+export Row
+
 function Base.show(io::IO, row::Row{NS,W}) where {NS,W}
   print(io, "Row{", NS, ",", W, "}(", row.coll, ")")
 end
@@ -65,6 +80,8 @@ end
 function Base.show(io::IO, ::MIME"text/plain", row::Row{NS,W}) where {NS,W}
   print(io, "Row{", NS, ",", W, "}(", row.coll, ")")
 end
+
+@inline Row{NS}(coll) where {NS} = Row{NS, length(coll)}(coll)
 
 #Row{NS,L,T}(coll) where {NS,L,T} = Row{NS,L,T,typeof(coll)}(coll)
 #Row{NS,L}(coll) where {NS,L} = Row{NS,L,Base.eltype(coll)}(coll)
@@ -86,7 +103,15 @@ end
   Row{NStates,Len}(c)
 end
 
-#TODO: tarviiks?
+
+"""
+Convert a `Row` backed by a `MVector` to one backed by an `SVector`.
+"""
+@inline function Base.convert(::Type{Row{N,L,T,CS}}, x::Row{N,L,T,CM}) where {N,L,T,CS<:SVector{L, T}, CM<:MVector{L, T}}
+  Row{N,L,T,CS}(SVector{L}(x))
+end
+
+#QUE: tarviiks?
 #= @inline function Base.similar(r::Row{NStates,Len,T,C}, dims::Int...) where {NStates,Len,T,C}
   @assert foldl(*, dims) == Len "dims gives a length of $(foldl(*,dims)) but Len was $Len"
   c = similar(r.coll, dims...)
@@ -116,6 +141,8 @@ struct DiscreteCA{NStates,Radius,RuleLen} <: Function
     new(rule, rule_to_rule_lookup(_r, NStates, Radius))
   end
 end
+
+export DiscreteCA
 
 @inline function Base.hash(a::DiscreteCA{N,R,RL}, h::UInt) where {N,R,RL}
   hash(:DiscreteCA, h) |> @©(hash(N)) |> @©(hash(R)) |> @©(hash(a.rule))
@@ -154,7 +181,9 @@ end
   ws = _wrap_state(state, RD)
   # run ws through xf, fold it into a container that's similar to `state` 
   xf = _transducer(dca)
-  _collect_into!(xf, ws, similar(state))
+  _ss = similar(state)
+  # @info "(dca)(state)" typeof(state) state typeof(_ss) _ss
+  _collect_into!(xf, ws, _ss)
 end
 
 "Feeds `foldable` into `xf` and collects the result into `collection`. Mutates `collection`"
@@ -174,14 +203,14 @@ Returns an [eduction](https://juliafolds.github.io/Transducers.jl/stable/referen
 """
 @inline _wrap_state(state, radius) = (@inbounds(@view(state[end-radius+1:end])), state, @inbounds(@view(state[1:radius]))) |> Cat()
 
-#HOX TODO: vaikka tää versio on ittessään vitusti nopeampi ku toi versio missä on Cat(), niin jotenkin ite CA on silti reilusti hitaampi jos tätä käyttää. MIKSI HÄ MITÄ VITTUA
+#QUE QUE: vaikka tää versio on ittessään vitusti nopeampi ku toi versio missä on Cat(), niin jotenkin ite CA on silti reilusti hitaampi jos tätä käyttää. MIKSI HÄ MITÄ VITTUA
 @inline function _wrap_state2(state, radius)
   slen = length(state)
   idxs = [slen-radius+1:slen; 1:slen; 1:radius]
   @inbounds @views state[idxs]
 end
 
-@inline neighborhood_size(::Type{<:DiscreteCA{NS,RD}}) where {NS,RD} = RD * 2 + 1
+@inline _neighborhood_size(::Type{<:DiscreteCA{NS,RD}}) where {NS,RD} = RD * 2 + 1
 
 """Return a transducer that applies the CA's rule.
 
@@ -189,21 +218,26 @@ end
 - turns each neighborhood x into a number, uses that to index into the rule_lookup to get the result
 """
 @inline function _transducer(dca::T) where {T<:DiscreteCA}
-  Consecutive(neighborhood_size(T), 1) |>
+  Consecutive(_neighborhood_size(T), 1) |>
   Map(@© _lookup_rule(dca))
 end
 
+# HUOM: käyttäytyy ihan vitun huonosti jos x ei oo indeksi rule_lookup:issa, koska @inbounds
 @inline function _lookup_rule(dca::DiscreteCA{NS}, x) where {NS}
   @inbounds dca.rule_lookup[undigits(x, NS)+1]
 end
 
 @testitem "evolution" begin
   using StaticArrays
-  state = Row{2}(@SVector [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+  state = Row{2}(BitVector([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
   ca = DiscreteCA{2}(110)
 
   @test ca(state) == [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   @inferred(ca(state))
+
+  state_b3 = Row{3}(@SVector [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+  ca_b3 = DiscreteCA{3}(110)
+  @inferred(ca_b3(state_b3))
 end
 
 """
@@ -215,17 +249,19 @@ Treat d as a little-endian vector of digits in `base` and return the base-10 rep
 
 
 ```jldoctest
-julia> Musica.undigits([0, 1, 1, 1, 1, 0, 0, 0])
+julia> undigits([0, 1, 1, 1, 1, 0, 0, 0])
 0x000000000000001e
 
-julia> Musica.undigits(Musica.rule_to_rule_lookup(22, 3), 3)
+julia> undigits(Musica.rule_to_rule_lookup(22, 3), 3)
 0x0000000000000016
 
-julia> Musica.undigits([])
+julia> undigits([])
 0x0000000000000000
 ```
 """
 undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=UInt(0))
+
+export undigits
 
 """
     Musica.rule_to_rule_lookup(rule::UInt, nstates::Int = 2, radius::Int = 1)
@@ -259,18 +295,18 @@ end
 end
 
 @testitem "parser" begin
-  @test digits(110; base=2) |> Musica.parser(DiscreteCA{2}) == (Bool[], Musica.DiscreteCA{2}(110))
+  @test digits(110; base=2) |> Musica.parser(DiscreteCA{2}) == (Bool[], DiscreteCA{2}(110))
 end
 
 @inline parser_bits_required(::Type{<:DiscreteCA{2}}; kw...) = 8
 
 """
-    Musica.num_to_ones(n, Val{N})
+    num_to_ones(n, Val{N})
 
 Return a `Row{2,N}` that contains `n` 1's. Little-endian, padded to length `N`
 
 ```jldoctest
-julia> Musica.num_to_ones(6, Val{8})
+julia> num_to_ones(6, Val{8})
 Row{2,8}(Bool[1, 1, 1, 1, 1, 1, 0, 0])
 ```
 """
@@ -279,37 +315,57 @@ Row{2,8}(Bool[1, 1, 1, 1, 1, 1, 0, 0])
   Row{2,L}([ones(Bool, n); zeros(Bool, L - n)])
 end
 
-@inline function num_to_row(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
+export num_to_ones
+
+@inline function num_to_row(n::Integer, _row_len::Type{Val{L}})::Row{2,L} where {L}
   Row{2,L}(digits(n; base=2, pad=L))
 end
 
+@inline function num_to_row(n::Integer, _base::Type{Val{Base}}, _row_len::Type{Val{L}})::Row{2,L} where {L,Base}
+  Row{Base,L}(digits(n; base=Base, pad=L))
+end
+
+export num_to_row
+
 @inline count_ones(r::Row)::Int = sum(filter(==(1), r))
 
+export count_ones
+
 @testitem "num_to_ones" begin
-  @test_throws AssertionError Musica.num_to_ones(-1, Val{8})
-  @test_throws AssertionError Musica.num_to_ones(256, Val{8})
+  @test_throws AssertionError num_to_ones(-1, Val{8})
+  @test_throws AssertionError num_to_ones(256, Val{8})
 end
 
 @inline num_from_gray(n) = UInt(Integer(reinterpret(Gray64, n)))
 
-@inline row_to_number(r::Row{2}) = r |> Musica.undigits
-@inline row_to_number(r::Row{N}) where {N} = r |> @£(Musica.undigits(N))
+export num_from_gray
+
+@inline row_to_number(r::Row{2}) = r |> undigits
+@inline row_to_number(r::Row{N}) where {N} = r |> @£(undigits(N))
+
+export row_to_number
 
 """
 Interpret a `Row` as being a Gray-coded integer
 """
-@inline row_from_gray(r::Row{2}) = r |> Musica.undigits |> num_from_gray
+@inline row_from_gray(r::Row{2}) = r |> undigits |> num_from_gray
+
+export row_from_gray
 
 @inline num_to_gray(x) = (x ⊻ (x >> 1))
+
+export num_to_gray
 
 @inline num_to_gray_row(x, w::Type{Val{width}}) where {width} = x |> num_to_gray |> @£ num_to_row(w)
 @inline num_to_gray_row(x, width::Int) = num_to_gray_row(x, Val{width})
 @inline num_to_gray_row(x) = num_to_gray_row(x, Val{16})
 
+export num_to_gray_row
+
 @testitem "gray coding" begin
   row_width = Val{5}
-  @test Musica.row_from_gray(Musica.num_to_row(5, row_width)) == 6
-  @test Musica.row_from_gray(Musica.num_to_row(10, row_width)) == 12
-  @test Musica.row_from_gray(Musica.num_to_row(1, row_width)) == 1
-  @test Musica.num_to_gray_row(12, row_width) == Musica.num_to_row(10, row_width)
+  @test row_from_gray(num_to_row(5, row_width)) == 6
+  @test row_from_gray(num_to_row(10, row_width)) == 12
+  @test row_from_gray(num_to_row(1, row_width)) == 1
+  @test num_to_gray_row(12, row_width) == num_to_row(10, row_width)
 end
