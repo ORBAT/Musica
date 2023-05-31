@@ -3,8 +3,13 @@ using TestItems, Test, Transducers, StaticArrays, Revise, BenchmarkTools, Metahe
 # BenchmarkTools.DEFAULT_PARAMETERS.samples = 30000
 
 includet("src/Musica.jl")
-
 using .Musica
+
+let prefix = "src/", ext = ".jl", files_to_track = ["CA", "collection_utils", "function_utils", "macros", "Neuron", "optimize", "parsing"]
+  foreach(files_to_track) do filename
+    Revise.track(Musica, prefix * filename * ext)
+  end
+end
 
 function new_state(::Type{Val{L}}) where {L}
   let bla = zeros(Int, L)
