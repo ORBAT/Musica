@@ -41,28 +41,3 @@ end
   iresult = Transducers.@next(Transducers.inner(rf), iresult, buffer)
   Transducers.complete(Transducers.inner(rf), iresult)
 end
-
-
-#NOTE: https://github.com/JuliaData/SplitApplyCombine.jl/blob/8534d12b7c6f78c85dcad9b22f7c6f619d62a9f4/src/only.jl
-@inline function only(iter)
-  i = iterate(iter)
-  if i === nothing
-      throw(ArgumentError("Collection must have exactly one element (input is empty)"))
-  end
-  (out, state) = i
-  if iterate(iter, state) === nothing
-      return out
-  else
-      throw(ArgumentError("Collection must have exactly one element (input contains more than one element)"))
-  end
-end
-
-@inline function only(::Tuple{})
-  throw(ArgumentError("Collection must have exactly one element (input is empty)"))
-end
-@inline function only(t::Tuple{Any})
-  return t[1]
-end
-@inline function only(::NTuple{N,Any}) where N
-  throw(ArgumentError("Collection must have exactly one element (input has $N elements)"))
-end
