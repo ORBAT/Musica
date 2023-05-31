@@ -121,9 +121,9 @@ end
 _row_width()::Int = 16
 #HOX: jos _bits_per_generation > 5 niin tuntuu että laatu kärsii, resultit on lähinnä suoraa viivaa.
 # 5 b/gen ja 5 b/CANeuronStack size ja full_data_generator on tuottanu ihan OK tuloksia. Pari sellasta yhen tai kahen CA:n stackia jotka on ollu yllättävän hyviä
-_bits_per_generation()::Int = 3
+_bits_per_generation()::Int = 6
+_bits_per_stack_size()::Int = 4
 _pop_size()::Int = 500
-_bits_per_stack_size()::Int = 6
 
 _StackType() = CANeuronStack{16,2,_row_width()}
 
