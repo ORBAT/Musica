@@ -119,10 +119,11 @@ export sampled_data_generator
 end
 
 _row_width()::Int = 16
-#HOX: jos _bits_per_generation > 5 niin tuntuu että laatu kärsii, resultit on lähinnä suoraa viivaa
-_bits_per_generation()::Int = 5
+#HOX: jos _bits_per_generation > 5 niin tuntuu että laatu kärsii, resultit on lähinnä suoraa viivaa.
+# 5 b/gen ja 5 b/CANeuronStack size ja full_data_generator on tuottanu ihan OK tuloksia. Pari sellasta yhen tai kahen CA:n stackia jotka on ollu yllättävän hyviä
+_bits_per_generation()::Int = 3
 _pop_size()::Int = 500
-_bits_per_stack_size()::Int = 5
+_bits_per_stack_size()::Int = 6
 
 _StackType() = CANeuronStack{16,2,_row_width()}
 
@@ -163,7 +164,7 @@ Metaheuristics.stop_check(population, criteria::_Neverstop) = false
   sampled_result_generator(_test_wanted_output(6)),
   Musica.make_fitness_function())
  =#
-function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4, termination=Metaheuristics.RelativeFunctionConvergence(), pop_size=_pop_size(),parser=_test_parser_dynamic(),with_indiv=nothing)
+function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4, termination=Metaheuristics.RelativeFunctionConvergence(), pop_size=_pop_size(),parser=_test_parser_dynamic(),with_indivs=())
 
   pop_size = pop_size
 
@@ -198,9 +199,10 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
     , input_based_result_gen()
     , create_fitness_fn()
   )
-  if !isnothing(with_indiv)
-    Metaheuristics.set_user_solutions!(ga, with_indiv, obj_fn)
-  end
+
+    foreach(with_indivs) do indiv
+      Metaheuristics.set_user_solutions!(ga, indiv, obj_fn)
+    end
 
   optimize(_obj_fn_to_parallel(obj_fn), BitArraySpace(num_bits), ga)
 end

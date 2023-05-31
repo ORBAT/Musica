@@ -5,13 +5,22 @@ Generally a `Parser` takes an `AbstractArray` input, parses it and returns lefto
 
 See [`parser`](@ref) methods
 """
-struct Parser <: Function
+struct Parser{T<:Union{Nothing, <:Any}} <: Function
   fn::Function
+  _for_type::T
+end
+
+function Parser(fn)
+  Parser(fn, Nothing)
 end
 
 function (p::Parser)(bits::T) where {T<:AbstractArray}
   p.fn(bits)
 end
+
+
+# TODO: jotain näitä allaolevia mä varmaan tarviin, mut ehkä turha tehdä vielä ennen ku tiiän tarkalleen mitä haluun :P
+# Vaatinee genomin parempaa suunnittelua
 
 #= """
 Return a parser that first parses input with `a`, then gives any leftover bits to `b`. If either parser returns `nothing`, consumes no input
