@@ -1,6 +1,5 @@
 
 using StaticArrays, StructArrays, TestItems, Folds
-using Musica: @©, @£
 #= ################### NOTE muistiinpanoja
 
 HOX: POPULAATIOSSA VOI OLLA ERI PITUSIA GENOMEJA!!!! Eli populaatio ei voi olla vaan m × N matriisi
@@ -12,9 +11,12 @@ mutable struct Individual{GenomeType<:AbstractArray}
   fitness::Float64
 end
 
-function evaluate_individual!(indiv, obj_fn::Function)
-  indiv.fitness = obj_fn(indiv.genome)
+function _calc_indiv_fitness!(indiv, obj_fn::Function, genome_mapper::Function)
+  # TODO KYS: vähän kluge, tiiä ees onko tarpeen. Heitä vittuun jahka homma etenee?
+  @assert isequal(indiv.fitness, Inf) "Evaluating individual that already has a fitness value"
+  indiv.fitness = obj_fn(genome_mapper(indiv.genome))
 end
+
 # HOX: jostain syystä koko paska kippaa jos Individual:illa tekee tän nimitempun.
 # UndefVarError: `Individual` not defined
 # Individual = _Individual2
@@ -29,59 +31,74 @@ end
 
 Base.@kwdef struct _Options
   # kova raja genomin pituudelle
-  genome_max_len::Int = 1024
+  genome_max_len::Int = 1366
 
-  # alotuspopulaation genomien minimikoko
-  initial_genome_min_len::Int = 32
+  genome_min_len::Int = 43
 
   objective_fn::Function
 end
 
 Options = _Options
 
-mutable struct _State5{N,GenomeType<:AbstractArray}
+mutable struct _State6{N,GenomeType<:AbstractArray}
   population::SizedVector{N,GenomeType} # genomit
   fitnesses::SizedVector{N,Float64}
 
   options::Options
-  
+
   generation::Int
-  
-  """
-  Index of best solution so far
-  """
-  best_idx::Int
+
+  best_solution_idx::Int
   n_better_than_parents::Int
+
+  _initialized::Bool
 end
 
-State = _State5
+State = _State6
 
-@inline function State{N}(population::PT, fitnesses, opts::Options) where {N,GT<:AbstractArray,PT<:SizedVector{N, GT}} 
-  State{N,GT}(population, fitnesses, opts, -1, 0, 0)
+@inline function State{N}(population::PT, fitnesses, opts::Options, inited=true) where {N,GT<:AbstractArray,PT<:SizedVector{N,GT}}
+  State{N,GT}(population, fitnesses, opts, -1, 0, 0, inited)
 end
 
-@inline State{N}(population::PT, opts::Options) where {N,GT<:AbstractArray,PT<:SizedVector{N, GT}}  = State{N}(population, SizedVector{N}(zeros(Float64, N)), opts)
+@inline function State{N}(population::PT, opts::Options) where {N,GT<:AbstractArray,PT<:SizedVector{N,GT}}
+  State{N}(population, SizedVector{N}(fill(Inf, N)), opts, false)
+end
 
-@inline individuals(s::State{N}) where {N} = StructVector{Individual}((s.population, s.fitnesses))
+const _StructVecIndiv = StructVector{Individual}
+
+@inline individuals(s::State{N}) where {N} = _StructVecIndiv((s.population, s.fitnesses))
 @inline individuals_lazy(s::State{N}) where {N} = individuals(s) |> LazyRows
 
+function _init!(s::State{N}) where {N}
+  # TODO: jos ei inited, niin evaluoi fitnessit
+
+end
+
 """
-Run one generation / step. Threaded
+Run one generation. Threaded
 """
-function trun_generation!(s::State{N}) where {N}
+function _run_generation!(s::State{N}) where {N}
+  # HOX: toimii vaan jos s._initialized!
+  # TODO: heitä vittuun kunhan koodi alkaa härmistyä
+  @assert s._initialized "State not initialized???"
+
   # select parents
   # run crossover
   # run mutation
-  # evaluate offspring. HOX: ennen tätä pitää tehdä genome -> underlying representation -mäppäys. Ks. genome.jl
-  # 
+  # evaluate offsprings. HOX: ennen tätä pitää tehdä genome -> underlying representation -mäppäys. Ks. genome.jl
+  # laske n_better_than_parents
+  # environmental selection: joko generational replacement tai elitist
+  #   - gen rep: koko populaatio korvataan offspringeillä
+  #   - elitist: toinen vanhempi korvataan vaan jos offspring parempi
+  # päivitä best_solution_idx 
 end
 
 @testitem "GA State" begin
   using StaticArrays
 
-  genome1 = BitVector((1, 1, 1, 1))
+  genome1 = Bool[1, 1, 1, 1]
   fitness1 = 1.0
-  genome2 = BitVector((0, 1))
+  genome2 = Bool[0, 1]
   fitness2 = 2.0
 
   obj_fn(genome) = 0.0
