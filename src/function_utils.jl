@@ -109,10 +109,6 @@ const CurryHeadTup = CurryHead{InitArg} where {InitArg<:Tuple}
 @inline (f::CurryHeadTup)(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
 @inline (f::CurryHeadTup)(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
 
-@testitem "CurryHead" begin
-
-end
-
 struct CurryTail{InitArg,F<:Function,KW} <: Function
   f::F
   x::InitArg
