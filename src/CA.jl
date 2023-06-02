@@ -55,10 +55,6 @@ end
 
 @inline Row{NS}(coll) where {NS} = Row{NS, length(coll)}(coll)
 
-#Row{NS,L,T}(coll) where {NS,L,T} = Row{NS,L,T,typeof(coll)}(coll)
-#Row{NS,L}(coll) where {NS,L} = Row{NS,L,Base.eltype(coll)}(coll)
-#Row{NS}(coll::SV) where {NS,L,T,SV<:Union{StaticVector{L,T},SizedVector{L,T}}} = Row{NS,L}(coll)
-
 @inline Base.IndexStyle(::Type{Row{NS,L,T,C}}) where {NS,L,T,C} = Base.IndexStyle(C)
 
 @inline function Base.similar(r::Row{NStates,Len,T,C}) where {NStates,Len,T,C<:SizedVector}
@@ -93,7 +89,7 @@ end
  
 @testitem "Row" begin
   using StaticArrays
-  bv = SizedVector{4}(BitVector(ones(Bool, 4)))
+  bv = SizedVector{4}(ones(Bool, 4))
   # comparison with eg. Bool[]
   @test Row{2}(bv) == Bool[1, 1, 1, 1]
 
