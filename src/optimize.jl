@@ -121,8 +121,8 @@ end
 _row_width()::Int = 16
 #HOX: jos _bits_per_generation > 5 niin tuntuu että laatu kärsii, resultit on lähinnä suoraa viivaa.
 # 5 b/gen ja 5 b/CANeuronStack size ja full_data_generator on tuottanu ihan OK tuloksia. Pari sellasta yhen tai kahen CA:n stackia jotka on ollu yllättävän hyviä
-_bits_per_generation()::Int = 6
-_bits_per_stack_size()::Int = 4
+_bits_per_generation()::Int = 7
+_bits_per_stack_size()::Int = 6
 _pop_size()::Int = 500
 
 _StackType() = CANeuronStack{16,2,_row_width()}
@@ -138,14 +138,14 @@ _test_parser_bits_required() = parser_bits_required(_StackType(); bits_per_gen=_
 _test_parser_bits_required_dyn() = Musica.parser_bits_required(CANeuronStack; bits_per_gen=_bits_per_generation(), bits_per_stack_size=_bits_per_stack_size())
 
 
-_test_wanted_output(num_cycles=3, scale_factor=2) = normalize([sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
-_test_wanted_output_cos(num_cycles=3, scale_factor=2) = normalize([cos(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
-_test_wanted_output_tan(num_cycles=3, scale_factor=2) = normalize([tan(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π)])
+_test_wanted_output(num_cycles=3, scale_factor=2) = normalize(sin(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π))
+_test_wanted_output_cos(num_cycles=3, scale_factor=2) = normalize(cos(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π))
+_test_wanted_output_tan(num_cycles=3, scale_factor=2) = normalize(tan(x / scale_factor) for x = 0:floor((num_cycles * scale_factor)π))
 
 ## HUOM: tällä hetkellä tää on yllättävän hyvä optimoimaan tätä. CANeuronStack{29}, row_width = 16, bits_per_gen = 3
 function _test_wanted_output_rastr(D=10, step=0.5)
-  rastr(x) = 10D + sum(x .* x - 10cos.(2π * x))
-  normalize([rastr(x) for x = -5:step:5])
+  rastr(x) = sum(x .* x - 10cos.(2π * x))
+  normalize(rastr(x) for x = -5:step:5)
 end
 
 
@@ -195,7 +195,7 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
   num_bits = _test_parser_bits_required_dyn()
   obj_fn = create_obj_fn(
     parser
-    , full_data_generator(_test_wanted_output(5))
+    , full_data_generator(_test_wanted_output_rastr(10,0.19))
     , input_based_result_gen()
     , create_fitness_fn()
   )
