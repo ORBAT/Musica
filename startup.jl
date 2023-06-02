@@ -20,7 +20,7 @@ function _track(m::Module, path::String)
 end
 
 _track(Musica, "src/")
-_track(Musica, "src/GA")
+_track(Musica.GA, "src/GA")
 
 function new_state(::Type{Val{L}}) where {L}
   let bla = zeros(Int, L)
