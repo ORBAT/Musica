@@ -1,7 +1,7 @@
 #=
-# HOX: genomin mietintää
+# NOTE: genomin mietintää
 
-HOX LOL, kysäsin GPT-4:ltä. Selittää mun tänhetkisen ajatuksen. Ks alla
+HUOM LOL, kysäsin GPT-4:ltä. Selittää mun tänhetkisen ajatuksen. Ks alla
 
 eli siis tänhetkinen genomi on ikään kuin aminohapot – yhtä aminohappoa enkoodaa useampi eri (D|R)NA -tripletti (eli kodoni?). Et esim 
 aminohappoa valiini enkoodaa (regexinä) GU[GACU]. Jos tän genomin päälle heittää jonkun error correcting coden (ECC), niin se tois siihen 
@@ -10,6 +10,11 @@ redundanssia – eri genomit vois dekoodautua samaksi bittisekvenssiksi.
 Sit tohon ku heittää insertion, deletion & swap -mutaatiot vielä päälle, niin vois olla jännä.
 
 
+HOX HOX HOX mitä jos vaan tekis niin, että N bittiä M:stä ei vaan "tee mitään"? Et jos vaikka 1/4, niin 1110 dekoodautuis 111. DNA/RNA:ssa se suhdeluku näyttää olevan 1/3, kun 3sta basesta lähinnä ne 2 ekaa vaikuttaa.
+
+DNA:ssa
+3^3 = 27 eli ~4.75bit informaatiota yht
+3^2 = 9, eli ~3.17bit informaatiota jää jäljelle
 
 
 ######################### TSÄTTI
@@ -35,7 +40,7 @@ Lastly, no error correction code can guarantee 100% error-free transmission, esp
 User
 Hey thanks for the rundown. I'm building a, uh, I guess you could call it a genetic programming system, that instead of using eg. a stack-based VM like StackGP, it does its computation using a sort of pipeline of 1+ cellular automata. Just ECAs so far, and just a linear CA1 -> CA2 -> CA3 pipeline (where each CA in the pipeline is iterated ≥1 times over the input data), but I'm planning to have it eventually evolve networks somehow.
 
-Right now the "genome" is essentially just a Julia `BItVector`, but I've been thinking of moving to something that's more reminiscent of how DNA/RNA codons work; I've understood that for example in RNA the triplets GU[GACU] (excuse my regex, so GUG, GUA etc) all encode for valine.
+Right now the "genome" is essentially just a Julia `BitVector`, but I've been thinking of moving to something that's more reminiscent of how DNA/RNA codons work; I've understood that for example in RNA the triplets GU[GACU] (excuse my regex, so GUG, GUA etc) all encode for valine.
 
 So I got to thinking whether ECCs could sort of simulate a similar mechanism. I'm thinking of it so that my current parsing where there's no redundancy in the coding (so eg a rule 110 CA can only be produced by a specific bit pattern) is sort of like the amino acids, and then adding an error correcting code on top of that would mean that multiple different "error-corrected genome" bit patterns would decode to the same value, eg. a bit pattern that stands for "instantiate a Rule 110 ECA in this spot".
 
