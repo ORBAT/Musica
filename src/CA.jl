@@ -33,34 +33,6 @@ struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
     new{NStates,Len,T,C}(c)
   end
 
-  function Row{2}(c::C) where {Len,T,C<:_SizedTypes{Len, T}}
-    # @debug "Row{2} SizedVector{Len,T}" typeof(c)
-    new_c = SizedVector{Len}(BitVector(c))
-    new{2,Len,Bool,SizedVector{Len,Bool,BitVector}}(new_c)
-  end
-
-  function Row{2}(c::C) where {Len,C<:SizedVector{Len,Bool,BitVector}}
-    # @debug "Row{2} SizedVector{Len,Bool,BitVector}" typeof(c)
-    new{2,Len,Bool,C}(c)
-  end
-
-  function Row{2, Len}(c::C) where {Len,C<:SizedVector{Len,Bool,BitVector}}
-    # @debug "Row{2} SizedVector{Len,Bool,BitVector}" typeof(c)
-    new{2,Len,Bool,C}(c)
-  end
-
-  function Row{2,Len}(c::C) where {Len,C<:BitVector}
-    # @debug "Row{2} BitVector"
-    @assert length(c) == Len "Tried to construct a Row with Len type parameter $Len, but with a collection of length $(length(c))"
-    new{2,Len,Bool,SizedVector{Len,Bool,BitVector}}(SizedVector{Len}(c))
-  end
-
-  function Row{2,Len}(c::C) where {Len,C<:AbstractArray}
-    # @debug "Row{2} AbstractArray $C"
-    @assert length(c) == Len "Tried to construct a Row with Len type parameter $Len, but with a collection of length $(length(c))"
-    new{2,Len,Bool,SizedVector{Len,Bool,BitVector}}(SizedVector{Len}(BitVector(c)))
-  end
-
   """
   Create a new `Row` from any `AbstractArray` `c`. Checks that `c`'s length is equal to `Len`
   """
