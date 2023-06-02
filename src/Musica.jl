@@ -6,9 +6,9 @@ include("parsing.jl")
 include("genome.jl")
 include("CA.jl")
 include("Neuron.jl")
-
-
 include("optimize.jl")
+
+include("./GA/GA.jl")
 
 end
 
