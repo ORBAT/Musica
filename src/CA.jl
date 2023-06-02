@@ -147,6 +147,8 @@ end
 * `RD` = `Radius`
 
 **HOX HOX** kokeillu vähän kaikkea mutta tän return type jostain syystä vaan tahtoo olla `any` jos statea ei tyypitä
+
+HOX TODO: pitää ehkä tehdä tästä myös mutatoiva versio. CANeuron ja CANeuronStack tuottaa muuten aika paljon gorbagea
 """
 @inline function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,L,State<:Row{NS,L}}
   # state wraps around at the ends
