@@ -1,3 +1,6 @@
+using ..Musica: @©, @£
+using Transducers, TestItems, Test
+
 #=
 # NOTE: genomin mietintää
 
@@ -96,3 +99,35 @@ Remember that error correction codes are designed to add robustness to the trans
 Good luck with your project! This kind of interdisciplinary work can be challenging, but it also has the potential to lead to innovative and interesting results.
 
 =#
+
+# NOTE: tavallaan se DNA:n tulkkaus jossa kodonit -> aminohapot
+function genome_to_underlying(genome::T, codon_size::Integer, redundant_per_codon::Integer) where {T<:AbstractArray}
+    @assert codon_size > redundant_per_codon "codon_size must be > redundant_per_codon"
+    _gen_to_underlying(genome, codon_size, redundant_per_codon)
+end
+
+function genome_to_underlying_mapper(codon_size::Integer, redundant_per_codon::Integer)
+    @assert codon_size > redundant_per_codon "codon_size must be > redundant_per_codon"
+    genome -> _gen_to_underlying(genome, codon_size, redundant_per_codon)
+end
+
+function _gen_to_underlying(genome::T, codon_size::Integer, redundant_per_codon::Integer) where {T<:AbstractArray}
+    genome |> Partition(4, flush=true) |> MapCat(@©(_droplast(redundant_per_codon))) |> collect
+end
+
+function _droplast(n, arr)
+    if length(arr) ≤ n
+      return convert(typeof(arr), [])
+    end
+    @inbounds arr[1:end-n]
+  end
+  
+  
+
+@testitem "genome_to_underlying" begin
+    genome = 1.0:14.0 |> collect
+    @test GA.genome_to_underlying(genome, 4, 1) == [1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 9.0, 10.0, 11.0, 13.0]
+    @test GA.genome_to_underlying_mapper(4, 1)(genome) == [1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 9.0, 10.0, 11.0, 13.0]
+end
+
+
