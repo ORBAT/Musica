@@ -16,7 +16,7 @@ struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
   #TODO: ei ehkä tarvii näin monta inner constructoria? Järkeistä vähän
 
   function Row{NS,L,T,C}(c::C) where {NS,L,T,C<:AbstractArray}
-    @assert length(c) == L "Tried to construct a Row with Len type parameter $Len, but with a collection of length $(length(c))"
+    @assert length(c) == L
     new{NS,L,T,C}(c)
   end
 
@@ -29,7 +29,6 @@ struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
   Create a new `Row` from a `StaticVector` or a `SizedVector`.
   """
   function Row{NStates}(c::C) where {NStates,Len,T,C<:_SizedTypes{Len, T}}
-    # @debug "Row{NStates} SizedVector"
     new{NStates,Len,T,C}(c)
   end
 
@@ -38,7 +37,7 @@ struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
   """
   function Row{NStates,Len}(c::C) where {NStates,Len,T,C<:AbstractArray{T}}
     # @debug "Row generic constr"
-    @assert length(c) == Len "Tried to construct a Row with Len type parameter $Len, but with a collection of length $(length(c))"
+    @assert length(c) == Len
     new{NStates,Len,T,C}(c)
   end
 end
@@ -103,7 +102,7 @@ struct DiscreteCA{NStates,Radius,RuleLen} <: Function
   rule_lookup::SVector{RuleLen,Int}
 
   function DiscreteCA{NStates,Radius,RuleLen}(rule) where {NStates,Radius,RuleLen}
-    @assert 0 ≤ rule < (NStates^RuleLen) "rule number for $(NStates) states must be ≥ 0 and < $(NStates^RuleLen), was $(rule)"
+    @assert 0 ≤ rule < (NStates^RuleLen)
     _r = convert(UInt, rule)
     @assert RuleLen == NStates^(2 * Radius + 1) "RuleLen must be NStates^(2 * Radius + 1)"
     new(rule, rule_to_rule_lookup(_r, NStates, Radius))

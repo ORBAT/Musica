@@ -8,7 +8,7 @@ struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
   generations::Int
 
   function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, gens::Integer) where {NStates,Width}
-    @assert gens > 0 "Number of generations must be >0, was $gens"
+    @assert gens > 0 "Number of generations must be >0"
     _g = Int(gens)
     new(ca, repeated(ca, _g), _g)
   end
