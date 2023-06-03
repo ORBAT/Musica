@@ -33,7 +33,7 @@ Base.@kwdef struct _Options
   # kova raja genomin pituudelle
   genome_max_len::Int = 1366
 
-  genome_min_len::Int = 43
+  initial_genome_min_len::Int = 43
 
   objective_fn::Function
 end
@@ -41,7 +41,7 @@ end
 Options = _Options
 
 mutable struct _State6{N,GenomeType<:AbstractArray}
-  population::SizedVector{N,GenomeType} # genomit
+  genomes::SizedVector{N,GenomeType} # genomit
   fitnesses::SizedVector{N,Float64}
 
   options::Options
@@ -56,17 +56,17 @@ end
 
 State = _State6
 
-@inline function State{N}(population::PT, fitnesses, opts::Options, inited=true) where {N,GT<:AbstractArray,PT<:SizedVector{N,GT}}
-  State{N,GT}(population, fitnesses, opts, -1, 0, 0, inited)
+@inline function State{N}(genomes::GS, fitnesses, opts::Options, inited=true) where {N,GT<:AbstractArray,GS<:SizedVector{N,GT}}
+  State{N,GT}(genomes, fitnesses, opts, -1, 0, 0, inited)
 end
 
-@inline function State{N}(population::PT, opts::Options) where {N,GT<:AbstractArray,PT<:SizedVector{N,GT}}
-  State{N}(population, SizedVector{N}(fill(Inf, N)), opts, false)
+@inline function State{N}(genomes::GS, opts::Options) where {N,GT<:AbstractArray,GS<:SizedVector{N,GT}}
+  State{N}(genomes, SizedVector{N}(fill(Inf, N)), opts, false)
 end
 
 const _StructVecIndiv = StructVector{Individual}
 
-@inline individuals(s::State{N}) where {N} = _StructVecIndiv((s.population, s.fitnesses))
+@inline individuals(s::State{N}) where {N} = _StructVecIndiv((s.genomes, s.fitnesses))
 @inline individuals_lazy(s::State{N}) where {N} = individuals(s) |> LazyRows
 
 function _init!(s::State{N}) where {N}
