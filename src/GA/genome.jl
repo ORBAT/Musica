@@ -111,26 +111,19 @@ function _zero_pad_array(a::AbstractArray{T}, wanted_len) where {T}
     [a; zeros(T, wanted_len - a_len)]
 end
 
-function genome_as_codons(genome::AbstractArray, codon_size::Integer=6, redundant_per_codon::Integer=2)
+## TODO: vois muokata parsereita käyttämään kodoneita? Vai onks ihan pöljä idea? Tarviiks mihinkään?
+# Jotenkin tuntuu et 
+function decode_genome(genome::AbstractArray, codon_size::Integer=6, redundant_per_codon::Integer=2)
     Iterators.partition(genome, codon_size) |>
-    Map(copy) |>
     Map(@£(_droplast(redundant_per_codon, codon_size))) |>
     Map(@£(_zero_pad_array(codon_size - redundant_per_codon)))
 end
 
-function genome_to_underlying(genome::AbstractArray, codon_size::Integer, redundant_per_codon::Integer)
+function decode_genome_flat(genome::AbstractArray, codon_size::Integer, redundant_per_codon::Integer)
     @assert codon_size > redundant_per_codon "codon_size must be > redundant_per_codon"
-    _gen_to_underlying(genome, codon_size, redundant_per_codon)
+    decode_genome(genome, codon_size, redundant_per_codon) |> Cat() |> collect
 end
 
-function genome_to_underlying_mapper(codon_size::Integer, redundant_per_codon::Integer)
-    @assert codon_size > redundant_per_codon "codon_size must be > redundant_per_codon"
-    genome -> _gen_to_underlying(genome, codon_size, redundant_per_codon)
-end
-
-function _gen_to_underlying(genome::AbstractArray, codon_size::Integer, redundant_per_codon::Integer)
-    genome_as_codons(genome, codon_size, redundant_per_codon) |> Cat() |> collect
-end
 
 function _droplast(arr::AbstractArray, n, max_len)
     # n = 1, max_len = 4
@@ -162,21 +155,20 @@ end
 
 @testitem "genome mappings" begin
     genome = 1.0:14.0 |> collect
-    @test GA.genome_as_codons(1:15 |> collect, 6, 2) |> collect == [[1, 2, 3, 4], [7, 8, 9, 10], [13, 14, 15, 0]]
+    @test GA.decode_genome(1:15 |> collect, 6, 2) |> collect == [[1, 2, 3, 4], [7, 8, 9, 10], [13, 14, 15, 0]]
 
-    @test GA.genome_as_codons(1:16, 6, 2) |> collect ==
-          GA.genome_as_codons(1:17, 6, 2) |> collect ==
-          GA.genome_as_codons(1:18, 6, 2) |> collect
+    @test GA.decode_genome(1:16, 6, 2) |> collect ==
+          GA.decode_genome(1:17, 6, 2) |> collect ==
+          GA.decode_genome(1:18, 6, 2) |> collect
 
     # [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14]]
-    @test GA.genome_to_underlying(genome, 4, 1) == [1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 9.0, 10.0, 11.0, 13.0, 14.0, 0.0]
+    @test GA.decode_genome_flat(genome, 4, 1) == [1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 9.0, 10.0, 11.0, 13.0, 14.0, 0.0]
 
     # 1:15 -> [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14, 15]]
     # 1:16 -> [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14, 15]]
     # koska 16 on sopivasti just ton vikan kodonin roska
-    @test GA.genome_to_underlying(1:15, 4, 1) == GA.genome_to_underlying(1:16, 4, 1)
+    @test GA.decode_genome_flat(1:15, 4, 1) == GA.decode_genome_flat(1:16, 4, 1)
 
-    @test GA.genome_to_underlying_mapper(4, 1)(genome) == [1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 9.0, 10.0, 11.0, 13.0, 14.0, 0.0]
 end
 
 
