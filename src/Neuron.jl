@@ -5,31 +5,31 @@ abstract type Neuron{NStates,InWidth,OutWidth} <: Function end
 struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
   ca::DiscreteCA
   repeated_ca_fn::Function
-  generations::Int
+  steps::Int
 
-  function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, gens::Integer) where {NStates,Width}
-    @assert gens > 0 "Number of generations must be >0"
-    _g = Int(gens)
+  function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, steps::Integer) where {NStates,Width}
+    @assert steps > 0 "Number of steps must be >0"
+    _g = Int(steps)
     new(ca, repeated(ca, _g), _g)
   end
 end
 
 @inline function Base.hash(a::CANeuron{N,W}, h::UInt) where {N,W}
-  hash(:CANeuron, h) |> @©(hash(N)) |> @©(hash(W)) |> @©(hash(a.ca)) |> @©(hash(a.generations))
+  hash(:CANeuron, h) |> @©(hash(N)) |> @©(hash(W)) |> @©(hash(a.ca)) |> @©(hash(a.steps))
 end
 
 @inline function Base.:(==)(a::CANeuron{N1,W1}, b::CANeuron{N2,W2}) where {N1,W1,N2,W2}
-  isequal(N1, N2) && isequal(W1, W2) && isequal(a.generations, b.generations) && isequal(a.ca, b.ca)
+  isequal(N1, N2) && isequal(W1, W2) && isequal(a.steps, b.steps) && isequal(a.ca, b.ca)
 end
 
 ## 
 
 function Base.show(io::IO, can::CANeuron{NS,Width}) where {NS,Width}
-  print(io, "CANeuron($(can.ca), width=$Width, gens=$(can.generations))")
+  print(io, "CANeuron($(can.ca), width=$Width, steps=$(can.steps))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", can::CANeuron{NS,Width}) where {NS,Width}
-  print(io, "CANeuron($(can.ca), width=$Width, gens=$(can.generations))")
+  print(io, "CANeuron($(can.ca), width=$Width, steps=$(can.steps))")
 end
 
 
@@ -37,16 +37,18 @@ end
   can.repeated_ca_fn(state)
 end
 
-@inline bits_per_generation_default() = 5
+@inline bits_per_steps_default() = 5
 
-parser_bits_required(::Type{<:CANeuron{2}}; bits_per_gen=bits_per_generation_default(), restkw...) = bits_per_gen + parser_bits_required(DiscreteCA{2}; restkw...)
+parser_bits_required(::Type{<:CANeuron{2}}; bits_for_steps=bits_per_steps_default(), restkw...) = bits_for_steps + parser_bits_required(DiscreteCA{2}; restkw...)
 
-@inline function parser(::Type{<:CANeuron{2,W}}; bits_per_gen=bits_per_generation_default()) where {W}
+@inline function parser(::Type{<:CANeuron{2,W}}; bits_for_steps=bits_per_steps_default()) where {W}
+  steps_parser = parser(ParseUInt(bits_for_steps))
+  ca_parser = parser(DiscreteCA{2})
   Parser() do bits
-    bitsleft, generations = parse_n_bits(bits, bits_per_gen)
-    bitsleft, ca = parser(DiscreteCA{2})(bitsleft)
-    #HUOM: generations+1 että saadaan aina vähintään 1 generation
-    (bitsleft, CANeuron{2,W}(ca, Int(generations + 1)))
+    bitsleft, steps = bits |> steps_parser #parse_n_bits(bits, bits_for_steps)
+    bitsleft, ca = ca_parser(bitsleft)
+    #HUOM: steps+1 että saadaan aina vähintään 1 step
+    (bitsleft, CANeuron{2,W}(ca, Int(steps + 1)))
   end
 end
 
@@ -58,21 +60,21 @@ end
 end
 
 @testitem "CANeuron parsing" begin
-  n_generations = 12
+  n_steps = 12
   rule = 110
-  const _bits_per_gen = 5
-  #HUOM: -1 koska CANeuron lisää aina yhden. Ks CANeuron kommentit
-  gen_bits = digits(n_generations - 1; base=2, pad=_bits_per_gen)
+  const _bitsfor_steps = 5
+  #HUOM: -1 koska CANeuron lisää aina yhden että tulee ainakin yks. Ks CANeuron kommentit
+  steps_bits = digits(n_steps - 1; base=2, pad=_bitsfor_steps)
   ca_bits = digits(rule; base=2, pad=8)
-  full_bits = BitVector(vcat(gen_bits, ca_bits))
+  full_bits = BitVector(vcat(steps_bits, ca_bits))
 
-  extra_bits = BitVector(vcat(gen_bits, ca_bits, ca_bits))
+  extra_bits = BitVector(vcat(steps_bits, ca_bits, ca_bits))
 
-  p = Musica.parser(CANeuron{2,8}; bits_per_gen=_bits_per_gen)
+  p = Musica.parser(CANeuron{2,8}; bits_for_steps=_bitsfor_steps)
 
-  @test p(full_bits) == (Bool[], CANeuron{2,8}(DiscreteCA{2}(110), n_generations))
-  @test p(BitVector(gen_bits)) == (Bool[], CANeuron{2,8}(DiscreteCA{2}(0), n_generations))
-  @test p(extra_bits) == (BitVector(ca_bits), CANeuron{2,8}(DiscreteCA{2}(110), n_generations))
+  @test p(full_bits) == (Bool[], CANeuron{2,8}(DiscreteCA{2}(110), n_steps))
+  @test p(BitVector(steps_bits)) == (Bool[], CANeuron{2,8}(DiscreteCA{2}(0), n_steps))
+  @test p(extra_bits) == (BitVector(ca_bits), CANeuron{2,8}(DiscreteCA{2}(110), n_steps))
 end
 
 const CANeuronStack{Size,NStates,StateWidth} = SVector{Size,CANeuron{NStates,StateWidth}} where {Size,NStates,StateWidth}
@@ -118,10 +120,10 @@ end
 
   rule1 = 110
   rule2 = 30
-  n_generations1 = 40
-  n_generations2 = 20
-  test_can1 = CANeuron{2,32}(DiscreteCA{2}(110), n_generations1)
-  test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_generations2)
+  n_steps1 = 40
+  n_steps2 = 20
+  test_can1 = CANeuron{2,32}(DiscreteCA{2}(110), n_steps1)
+  test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_steps2)
   cas = CANeuronStack{2,2,32}(test_can1, test_can2)
   state = new_state(Val{32})
   @test cas(state) == test_can1(state) |> test_can2
@@ -153,7 +155,7 @@ end
 
 function parser(::Type{<:CANeuronStack}; bits_per_stack_size=5, state_width=16, kw...)
   Parser() do bits
-    bitsleft, _stack_size = bits |> @£(parse_n_bits(bits_per_stack_size))
+    bitsleft, _stack_size = bits |> parser(ParseUInt(bits_per_stack_size))
     stack_size::Int = Int(_stack_size) + 1
 
     out = Vector{CANeuron{2,state_width}}(undef, Int(stack_size))
@@ -171,48 +173,48 @@ end
 @testitem "CANeuronStack static size parsing" begin
   rule1 = 110
   rule2 = 30
-  const _bits_per_gen = 5
-  n_generations1 = 5
-  n_generations2 = 20
+  const _bitsfor_steps = 5
+  n_steps1 = 5
+  n_steps2 = 20
   #HUOM: -1 koska CANeuron lisää aina yhden, ks CANeuron kommentit
-  gen_bits1 = digits(n_generations1 - 1; base=2, pad=_bits_per_gen)
-  gen_bits2 = digits(n_generations2 - 1; base=2, pad=_bits_per_gen)
+  steps_bits1 = digits(n_steps1 - 1; base=2, pad=_bitsfor_steps)
+  steps_bits2 = digits(n_steps2 - 1; base=2, pad=_bitsfor_steps)
   ca1_bits = digits(rule1; base=2, pad=8)
   ca2_bits = digits(rule2; base=2, pad=8)
-  full_bits1 = BitVector(vcat(gen_bits1, ca1_bits))
-  full_bits2 = BitVector(vcat(gen_bits2, ca2_bits))
+  full_bits1 = BitVector(vcat(steps_bits1, ca1_bits))
+  full_bits2 = BitVector(vcat(steps_bits2, ca2_bits))
 
-  test_can1 = CANeuron{2,32}(DiscreteCA{2}(110), n_generations1)
-  test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_generations2)
+  test_can1 = CANeuron{2,32}(DiscreteCA{2}(110), n_steps1)
+  test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_steps2)
 
-  p = Musica.parser(CANeuronStack{2,2,32}; bits_per_gen=_bits_per_gen)
+  p = Musica.parser(CANeuronStack{2,2,32}; bits_for_steps=_bitsfor_steps)
   @test p(vcat(full_bits1, full_bits2)) == (Bool[], CANeuronStack{2}(test_can1, test_can2))
 end
 
 @testitem "CANeuronStack dynamic size parsing" begin
   rule1 = 110
   rule2 = 30
-  const _bits_per_gen = 5
+  const _bitsfor_steps = 5
   const _bits_per_stack_size = 2
-  n_generations1 = 5
-  n_generations2 = 20
+  n_steps1 = 5
+  n_steps2 = 20
 
   #HUOM: -1 koska CANeuron lisää aina yhden, ks CANeuron kommentit
-  gen_bits1 = digits(n_generations1 - 1; base=2, pad=_bits_per_gen)
-  gen_bits2 = digits(n_generations2 - 1; base=2, pad=_bits_per_gen)
+  steps_bits1 = digits(n_steps1 - 1; base=2, pad=_bitsfor_steps)
+  steps_bits2 = digits(n_steps2 - 1; base=2, pad=_bitsfor_steps)
   ca1_bits = digits(rule1; base=2, pad=8)
   ca2_bits = digits(rule2; base=2, pad=8)
-  can1_bits = BitVector(vcat(gen_bits1, ca1_bits))
-  can2_bits = BitVector(vcat(gen_bits2, ca2_bits))
+  can1_bits = BitVector(vcat(steps_bits1, ca1_bits))
+  can2_bits = BitVector(vcat(steps_bits2, ca2_bits))
   stack_size_bits = digits(1; base=2, pad=_bits_per_stack_size)
   full_bits = vcat(stack_size_bits, can1_bits, can2_bits)
 
-  test_can1 = CANeuron{2,32}(DiscreteCA{2}(110), n_generations1)
-  test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_generations2)
+  test_can1 = CANeuron{2,32}(DiscreteCA{2}(110), n_steps1)
+  test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_steps2)
 
-  p = Musica.parser(CANeuronStack; bits_per_gen=_bits_per_gen, bits_per_stack_size=_bits_per_stack_size, state_width=32)
+  p = Musica.parser(CANeuronStack; bits_for_steps=_bitsfor_steps, bits_per_stack_size=_bits_per_stack_size, state_width=32)
 
-  @test Musica.parser_bits_required(CANeuronStack; bits_per_stack_size=2, bits_per_gen=2) == 4 * Musica.parser_bits_required(CANeuron{2}, bits_per_gen=2) + _bits_per_stack_size
+  @test Musica.parser_bits_required(CANeuronStack; bits_per_stack_size=2, bits_for_steps=2) == 4 * Musica.parser_bits_required(CANeuron{2}, bits_for_steps=2) + _bits_per_stack_size
 
   @test p(full_bits) == (Bool[], CANeuronStack{2}(test_can1, test_can2))
 end
