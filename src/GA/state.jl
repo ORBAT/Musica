@@ -29,7 +29,7 @@ end
   isequal(a.fitness, b.fitness) && isequal(a.genome, b.genome)
 end
 
-Base.@kwdef struct _Options{RNG<:Random.AbstractRNG}
+Base.@kwdef struct _Options
   # kova raja genomin pituudelle
   genome_max_len::Int = 2048
 
@@ -93,9 +93,9 @@ function _run_generation!(s::State{N}) where {N}
   @assert s._initialized "State not initialized???"
 
   # select parents
-  # run crossover
-  # run mutation
-  # evaluate offsprings. HOX: ennen tätä pitää tehdä genome -> underlying representation -mäppäys. Ks. genome.jl
+  # run crossover. HOX: tätä varten pitää tehdä genome -> codons
+  # run mutation. HOX: ja sit tänne taas heti codons -> genome
+  # evaluate offsprings. HOX: ja tätä varten sit genome -> underlying representation -mäppäys. Ks. genome.jl
   # laske n_better_than_parents
   # environmental selection: joko generational replacement tai elitist
   #   - gen rep: koko populaatio korvataan offspringeillä
