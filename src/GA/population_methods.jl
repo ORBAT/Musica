@@ -9,14 +9,16 @@ end
 # eiks tää vittu riko nyt ton mun hienon genomi-idean? Tää saattaa katkasta kodonin näppärästi 
 # keskeltä
 # HOX HOX HOX HOX HOX
-function uniformish_crossover(a, b; rng=Random.default_rng())
-  # HOX! vanhemmalta saatujen bittien etäisyydet ei sais muuttua, koska linkage (ks essentials of metaheuristics p38)
-  # eli esim jos a:sta otetaan bitit [2, 3, 4, 6], ne on aina just tossa järjestyksessä, ja esim bitin 4 ja 6 välissä 
+#
+## -------> HUOM: ei haittaa! Tää on täysin agnostic a:n ja b:n rakenteelle. et jos niistä tekee esim Vector{Vector{Bool}} tmv ni homma
+# pelannee mainiosti. TODO: VITTU TESTAA ETTÄ SE PELAA
+function uniformish_crossover(a::AbstractArray, b::AbstractArray; rng=Random.default_rng())
+  # HOX! vanhemmalta saatujen bittien etäisyydet ei sais muuttua, koska geenien linkage (ks essentials of metaheuristics p38)
+  # eli esim jos a:sta otetaan bitit [2, 3, 4, 6], ne on sit jälkeläisessä aina just tossa järjestyksessä, ja esim bitin 4 ja 6 välissä 
   # voi olla vaan 1 bitti b:stä
 
   # a = [10,  20,  30,  40,  50,  60, 70, 80, 90]
   # b = [100, 200, 300, 400, 500]
-  #        x         x         x
   a_len = length(a)
   # a_len = 9
   b_len = length(b)
@@ -40,7 +42,11 @@ function uniformish_crossover(a, b; rng=Random.default_rng())
   shorter_mask = StatsBase.sample(rng, 1:shorter_len, n_bits_from_shorter; replace=false, ordered=true)
   # shorter_mask = [1, 3, 5]
   # tää on ikään kuin sapluuna [1, _, 3, _, 5]
-  # shorter_mask_len = @inbounds _mask_len(shorter_mask)
+  #
+  # [100, 200, 300, 400, 500]
+  #   ^         ^         ^
+  #
+  # shorter_mask_len = _mask_len(shorter_mask)
   # shorter_mask_len = 5
   # shorterin sapluuna on yhteensä 5 pitkä, eli se mahtuu alkamaan jälkeläisessä indekseiltä
   # 1: [s, _, s, _, s, _, _, _]
