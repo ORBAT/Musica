@@ -10,10 +10,10 @@ A sized container type for 1-dimensional CA rows. `NStates` is the number of sta
 
 Is a subtype of `AbstractVector` and should implement the whole interface for it
 """
-struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
+struct Row{NStates,Len,T,C<:AbstractArray{T}} <: AbstractVector{T}
   coll::C
 
-  function Row{NS,L,T,C}(c::C) where {NS,L,T,C<:AbstractArray}
+  function Row{NS,L,T,C}(c::C) where {NS,L,T,C<:AbstractArray{T}}
     @assert length(c) == L
     new{NS,L,T,C}(c)
   end
