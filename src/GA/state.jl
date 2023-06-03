@@ -1,5 +1,5 @@
 
-using StaticArrays, StructArrays, TestItems, Folds
+using StaticArrays, StructArrays, TestItems, Folds, Random
 #= ################### NOTE muistiinpanoja
 
 HOX: POPULAATIOSSA VOI OLLA ERI PITUSIA GENOMEJA!!!! Eli populaatio ei voi olla vaan m × N matriisi
@@ -29,18 +29,21 @@ end
   isequal(a.fitness, b.fitness) && isequal(a.genome, b.genome)
 end
 
-Base.@kwdef struct _Options
+Base.@kwdef struct _Options{RNG<:Random.AbstractRNG}
   # kova raja genomin pituudelle
-  genome_max_len::Int = 1366
+  genome_max_len::Int = 2048
 
-  initial_genome_min_len::Int = 43
-
+  initial_genome_min_len::Int = 256
   objective_fn::Function
+
+  # TODO HOX: rng???
+  # -> Random.default_rng() ei oo thread safe (koska se on task local), eli
+  # sitä ei voi vaan passailla ympäriinsä jos ei ihan tiiä mihin threadiin se joutuu
 end
 
 Options = _Options
 
-mutable struct _State6{N,GenomeType<:AbstractArray}
+mutable struct State{N,GenomeType<:AbstractArray}
   genomes::SizedVector{N,GenomeType} # genomit
   fitnesses::SizedVector{N,Float64}
 
@@ -53,8 +56,6 @@ mutable struct _State6{N,GenomeType<:AbstractArray}
 
   _initialized::Bool
 end
-
-State = _State6
 
 @inline function State{N}(genomes::GS, fitnesses, opts::Options, inited=true) where {N,GT<:AbstractArray,GS<:SizedVector{N,GT}}
   State{N,GT}(genomes, fitnesses, opts, -1, 0, 0, inited)
@@ -69,9 +70,18 @@ const _StructVecIndiv = StructVector{Individual}
 @inline individuals(s::State{N}) where {N} = _StructVecIndiv((s.genomes, s.fitnesses))
 @inline individuals_lazy(s::State{N}) where {N} = individuals(s) |> LazyRows
 
-function _init!(s::State{N}) where {N}
-  # TODO: jos ei inited, niin evaluoi fitnessit
+function _generate_random_individuals(o::Options, n)
+  
+end
 
+@inline function _generate_random_individual(o::Options)
+  rand(Bool, rand(o.initial_genome_min_len:o.genome_max_len))
+end
+
+function _init!(s::State{N}) where {N}
+  @assert !s._initialized "GA.State already initialized"  
+  # - luo populaatio
+  # - evaluoi fitnessit
 end
 
 """
