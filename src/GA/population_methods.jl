@@ -1,5 +1,9 @@
 using StatsBase, Random
 
+function tournament_select(individuals, tournament_size=2)
+  error("WIP")
+end
+
 function uniformish_crossover(a, b; rng=Random.default_rng())
   # HOX! vanhemmalta saatujen bittien etäisyydet ei sais muuttua, koska linkage (ks essentials of metaheuristics p38)
   # eli esim jos a:sta otetaan bitit [2, 3, 4, 6], ne on aina just tossa järjestyksessä, ja esim bitin 4 ja 6 välissä 
@@ -19,15 +23,13 @@ function uniformish_crossover(a, b; rng=Random.default_rng())
     (b, b_len, a, a_len)
   end
 
-  # KYS HOX: kun toisen roundaa ylös ja toisen alas, niin jos a_len==b_len ja se on pariton ni offspring_len==a_len==b_len????
+  # kun toisen roundaa ylös ja toisen alas, niin jos a_len==b_len ja se on pariton, ni offspring_len == a_len == b_len
   n_bits_from_shorter = div(shorter_len, 2, RoundUp)
   # n_bits_from_shorter = 3
   n_bits_from_longer = div(longer_len, 2, RoundDown)
   # n_bits_from_longer = 5
   offspring_len = n_bits_from_shorter + n_bits_from_longer
   # offspring_len = 8
-
-
 
   shorter_mask = StatsBase.sample(rng, 1:shorter_len, n_bits_from_shorter; replace=false, ordered=true)
   # shorter_mask = [1, 3, 5]
@@ -66,7 +68,7 @@ end
 
 Base.@propagate_inbounds _mask_len(m) = (m[end] - m[1]) + 1
 
-function _random_mask_position(mask, offspring_len, rng)
+Base.@propagate_inbounds function _random_mask_position(mask, offspring_len, rng)
   mask_len = _mask_len(mask)
   start_idx = rand(rng, 1:(offspring_len-mask_len)+1)
   offset = start_idx - mask[1]
