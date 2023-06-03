@@ -294,9 +294,7 @@ end
 
 export num_to_row
 
-@inline count_ones(r::Row)::Int = sum(filter(==(1), r))
-
-export count_ones
+@inline (Base.count_ones(r::T)::Int) where {T<:Union{AbstractArray{Bool}, Row}} = sum(filter(==(1), r))
 
 @testitem "num_to_ones" begin
   @test_throws AssertionError num_to_ones(-1, Val{8})
