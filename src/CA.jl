@@ -13,8 +13,6 @@ Is a subtype of `AbstractVector` and should implement the whole interface for it
 struct Row{NStates,Len,T,C<:AbstractArray} <: AbstractVector{T}
   coll::C
 
-  #TODO: ei ehkä tarvii näin monta inner constructoria? Järkeistä vähän
-
   function Row{NS,L,T,C}(c::C) where {NS,L,T,C<:AbstractArray}
     @assert length(c) == L
     new{NS,L,T,C}(c)
@@ -214,7 +212,7 @@ end
 
 Treat d as a little-endian vector of digits in `base` and return the base-10 representation.
 
-- TODO: tuki arvoille jotka on `> typemax(UInt64)`
+- TODO: tuki arvoille jotka on `> typemax(UInt64)`, koska muuten Row:n maksimipituus on 64
 
 
 ```jldoctest

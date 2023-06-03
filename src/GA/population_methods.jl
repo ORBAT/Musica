@@ -4,6 +4,11 @@ function tournament_select(individuals, tournament_size=2)
   error("WIP")
 end
 
+
+### HOX HOX HOX HOX:
+# eiks tää vittu riko nyt ton mun hienon genomi-idean? Tää saattaa katkasta kodonin näppärästi 
+# keskeltä
+# HOX HOX HOX HOX HOX
 function uniformish_crossover(a, b; rng=Random.default_rng())
   # HOX! vanhemmalta saatujen bittien etäisyydet ei sais muuttua, koska linkage (ks essentials of metaheuristics p38)
   # eli esim jos a:sta otetaan bitit [2, 3, 4, 6], ne on aina just tossa järjestyksessä, ja esim bitin 4 ja 6 välissä 
@@ -31,6 +36,7 @@ function uniformish_crossover(a, b; rng=Random.default_rng())
   offspring_len = n_bits_from_shorter + n_bits_from_longer
   # offspring_len = 8
 
+  # indeksit, jotka lyhyemmästä tulee mukaan jälkeläiseen
   shorter_mask = StatsBase.sample(rng, 1:shorter_len, n_bits_from_shorter; replace=false, ordered=true)
   # shorter_mask = [1, 3, 5]
   # tää on ikään kuin sapluuna [1, _, 3, _, 5]
@@ -44,33 +50,37 @@ function uniformish_crossover(a, b; rng=Random.default_rng())
   # start_idx = rand(1:(offspring_len-shorter_mask_len)+1)
   # start_idx = rand(1:(8-5)+1)
   # start_idx = 3
-  # nyt sitä sapluunaa pitää shiftata sen verran että se alkaa halutusta kohdasta
-  # shorter_mask_offset = @inbounds start_idx - shorter_mask[1]
-  # shorter_mask_offset = 2
 
-  # nää on sit ne _jälkeläisen_ indeksit jotka tulee shorterilta
+  # nyt sitä sapluunaa pitää shiftata sen verran että se alkaa halutusta kohdasta.
+  #
+  # Nää on sit ne _jälkeläisen_ indeksit jotka tulee shorterilta. Järjestys ja numeroiden suhteellinen paikka säilyy, 
+  # shorter_mask vaan siirtyy
   # idxs_from_shorter = shorter_mask .+ shorter_mask_offset
-  idxs_from_shorter = _random_mask_position(shorter_mask, offspring_len,rng)
+  idxs_from_shorter = _randomize_mask_position(shorter_mask, offspring_len,rng)
   # idxs_from_shorter = [3, 5, 7]
 
-  # ja loput tulee sit longerilta
+  # idxs_from_shorter:in komplementti, eli siis _jälkeläisen_ indeksit jotka tulee longerilta. Tää ottaa rangesta 1:offspring_len kaikki,
+  # jotka ei löydy idxs_from_shorter:ista, ts. ne indeksit jotka ei tuu shorterilta tulee longerilta.
   idxs_from_longer = findall((!in).(1:offspring_len, (idxs_from_shorter,)))
   # idxs_from_longer = [1, 2, 4, 6, 8]
   #= NOTE:
     When broadcasting with in.(items, collection) or items .∈ collection, both item and collection are broadcasted over, which is often not what is intended. For example, if both arguments are vectors (and the dimensions match), the result is a vector indicating whether each value in collection items is in the value at the corresponding position in collection. To get a vector indicating whether each value in items is in collection, wrap collection in a tuple or a Ref like this: in.(items, Ref(collection)) or items .∈ Ref(collection).
   =#
-  longer_mask = _random_mask_position(idxs_from_longer, longer_len, rng)
+
+  # ja tehdään idxs_from_longer:ista maski longerille (nyt mentiin `offspring` idxs -> `longer` idxs, shorterin kanssa mentiin `shorter` idxs -> `offspring` idxs)
+  longer_mask = _randomize_mask_position(idxs_from_longer, longer_len, rng)
   offspring = similar(shorter, offspring_len)
   offspring[idxs_from_shorter] = shorter[shorter_mask]
   offspring[idxs_from_longer] = longer[longer_mask]
   offspring
 end
 
-Base.@propagate_inbounds _mask_len(m) = (m[end] - m[1]) + 1
+# HOX: olettaa että `indices` on little-endian järjestyksessä
+Base.@propagate_inbounds _mask_len(indices) = (indices[end] - indices[1]) + 1
 
-Base.@propagate_inbounds function _random_mask_position(mask, offspring_len, rng)
+Base.@propagate_inbounds function _randomize_mask_position(mask, last_index, rng)
   mask_len = _mask_len(mask)
-  start_idx = rand(rng, 1:(offspring_len-mask_len)+1)
+  start_idx = rand(rng, 1:(last_index-mask_len)+1)
   offset = start_idx - mask[1]
   mask .+ offset
 end
