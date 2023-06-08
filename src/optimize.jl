@@ -204,7 +204,7 @@ function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=6
       Metaheuristics.set_user_solutions!(ga, indiv, obj_fn)
     end
 
-  optimize(_obj_fn_to_parallel(obj_fn), BitArraySpace(num_bits), ga)
+  Metaheuristics.optimize(_obj_fn_to_parallel(obj_fn), BitArraySpace(num_bits), ga)
 end
 
 function get_best_at(fn, opt_result)
