@@ -5,12 +5,12 @@ using ..Musica: _SizedTypes
 palauttaa 
     [(parent_a1, parent_b1), (parent_a2, parent_b2), [...], (parent_an, parent_bn)]
 """
-function select_parents(population::AbstractArray{Individual}, n; tournament_size=3, rng=Random.default_rng())::AbstractArray{NTuple{2,Individual}}
+function select_parents(population::AbstractArray{Indiv}, n; tournament_size=3, rng=Random.default_rng())::AbstractArray{NTuple{2,Indiv}} where Indiv
   # HOX: population pitää olla fitnessin mukaan järjestyksessä, paras eka
   # TODO FIXME: poista tää assert jahka homma pelittää
   @assert issorted(population; by=fitness)
-  # (Individual, Individual)[]
-  parents = Array{NTuple{2,Individual}}(undef, n)
+  # (Indiv, Indiv)[]
+  parents = Array{NTuple{2,Indiv}}(undef, n)
   foreach(1:n) do i
     @inbounds parents[i] = tournament_select(population, Val{2}; tournament_size, rng)
   end
