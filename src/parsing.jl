@@ -1,23 +1,33 @@
 using Transducers, TestItems
 
+const IntArray = AbstractArray{<:Integer}
+
 """
 Generally a `Parser` takes an `AbstractArray` input, parses it and returns leftover input and the result of the parse.
 
 See [`parser`](@ref) methods
 """
-struct Parser{T<:Union{Nothing, <:Any}} <: Function
+struct Parser{In,Out} <: Function
   fn::Function
-  _for_type::T
 end
 
+function Parser(fn, ::Type{Out}) where {Out}
+  Parser(fn, IntArray, Out)
+end
+
+function Parser(fn, ::Type{In}, ::Type{Out}) where {In, Out}
+  Parser{In, Out}(fn)
+end
+
+# HOX FIXME tää on se vanha malli missä parserin inputti oli aina vaan bittejä
 function Parser(fn)
   Parser(fn, Nothing)
 end
 
-function (p::Parser)(bits::T) where {T<:AbstractArray}
+# HOX: se wanha malli taas
+function (p::Parser)(bits::T) where {T<:IntArray}
   p.fn(bits)
 end
-
 
 # TODO: jotain näitä allaolevia mä varmaan tarviin, mut ehkä turha tehdä vielä ennen ku tiiän tarkalleen mitä haluun :P
 # Vaatinee genomin parempaa suunnittelua
@@ -40,7 +50,7 @@ function Base.:|(a::Parser, b::Parser)
   error("WIP")
 end
 
-  
+
 @testitem "Parser" begin
   using Transducers
   parse_ones(n) = Musica.Parser() do input
@@ -69,7 +79,7 @@ end
 end
  =#
 
-function parse_n_bits(input::T, n_bits) where {T<:AbstractArray}
+function parse_n_bits(input::T, n_bits) where {T<:IntArray}
   (input |> Drop(n_bits) |> collect, undigits(input |> Take(n_bits) |> collect))
 end
 
