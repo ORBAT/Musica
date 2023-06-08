@@ -137,19 +137,23 @@ const _emptyKW = pairs((;))
 @inline _merge_nonempty(::_EmptyKW, d::AbstractDict) = d
 @inline _merge_nonempty(::_EmptyKW, ::_EmptyKW) = _emptyKW
 
+macro ©(ex)
+  _curried(ex, :CurryHead)
+end
+
 """
-    @© fn(a)
-    @© fn(a, b)
-    @© fn(a; kw=1)
+    @> fn(a)
+    @> fn(a, b)
+    @> fn(a; kw=1)
 
 Curry a function call so that arguments are bound starting from the first (left). The argument must be a function call with at least one argument, and zero or more keyword arguments.
 
-    curried = @© fn(a,b); curried(c, d) == fn(a, b, c, d)
+    curried = @> fn(a,b); curried(c, d) == fn(a, b, c, d)
 
 See [`CurryHead`](@ref).
 
 ```jldoctest
-julia> a = 1; plus1 = @© +(a);
+julia> a = 1; plus1 = @> +(a);
 
 julia> plus1(2)
 3
@@ -157,7 +161,7 @@ julia> plus1(2)
 julia> plus1(2, 3)
 6
 
-julia> to_binary_digits = @© digits(Int; base=2);
+julia> to_binary_digits = @> digits(Int; base=2);
 
 julia> show(to_binary_digits(20; pad=8))
 [0, 0, 1, 0, 1, 0, 0, 0]
@@ -167,23 +171,27 @@ julia> show(to_binary_digits(20))
 
 julia> fn = (a, b, c, d; kw1, kw2) -> (a+b+c+d)kw1 // kw2;
 
-julia> curried = @© fn(1, 2; kw1 = 13);
+julia> curried = @> fn(1, 2; kw1 = 13);
 
 julia> curried(3, 4; kw2 = 1000) # same as fn(1, 2, 3, 4; kw1 = 13, kw2 = 1000)
 13//100
 
+```
 julia> fn(1, 2, 3, 4; kw1 = 13, kw2 = 1000) == curried(3, 4; kw2 = 1000)
 true
-```
 """
-macro ©(ex)
+macro >(ex)
   _curried(ex, :CurryHead)
 end
 
+macro £(ex)
+  _curried(ex, :CurryTail)
+end
+
 """
-@£ fn(a)
-@£ fn(a, b)
-@£ fn(a; kw=1)
+@< fn(a)
+@< fn(a, b)
+@< fn(a; kw=1)
 
 Convenience macro for constructing a [`CurryTail`](@ref). The argument must be a function call with at least one argument, 
 and zero or more keyword arguments.
@@ -191,24 +199,24 @@ and zero or more keyword arguments.
 ```jldoctest
 julia> fn = (a, b, c, d; kw1, kw2) -> (a+b+c+d)kw1 // kw2;
 
-julia> curried = @© fn(1, 2; kw1 = 13);
+julia> curried = @< fn(3, 40; kw2 = 1000);
 
-julia> curried(3, 40; kw2 = 1000) # same as fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000)
+julia> curried(1, 2; kw1 = 13) # same as fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000)
 299//500
 
-julia> fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000) == curried(3, 40; kw2 = 1000)
+julia> fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000) == curried(1, 2; kw1 = 13)
 true
 ```
 
 """
-macro £(ex)
+macro <(ex)
   _curried(ex, :CurryTail)
 end
 
 function _curried(ex, Constructor)
-  @capture(ex, fn_(args__; kws__) | fn_(args__)) || error("Not used on a function call? Syntax: @© f(a, b; c = 1)")
+  @capture(ex, fn_(args__; kws__) | fn_(args__)) || error("Not used on a function call? Syntax: @> f(a, b; c = 1)")
   if length(args) == 0
-    error("Function call had no arguments. Syntax: @© f(a, b; c = 1)")
+    error("Function call had no arguments. Syntax: @> f(a, b; c = 1)")
   end
 
   # @debug fn args kws
@@ -224,4 +232,4 @@ function _curried(ex, Constructor)
   end
 end
 
-export CurryHead, @©, @£
+export CurryHead, @©, @£, @>, @<
