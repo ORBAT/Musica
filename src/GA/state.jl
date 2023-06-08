@@ -2,6 +2,9 @@
 using StaticArrays, StructArrays, TestItems, Folds, Random
 using ..Musica: _SizedTypes
 
+
+const Maybe{T} = Union{T, Nothing}
+
 #= ################### NOTE muistiinpanoja
 
 HOX: POPULAATIOSSA VOI OLLA ERI PITUSIA GENOMEJA!!!! Eli populaatio ei voi olla vaan m × N matriisi
@@ -13,10 +16,16 @@ mutable struct Individual{GenomeType<:AbstractArray}
   fitness::Float64
 end
 
-function _calc_indiv_fitness!(indiv, obj_fn::Function, genome_mapper::Function)
+@inline fitness(indiv::Individual) = indiv.fitness
+@inline function set_fitness(indiv::Individual, f::Float64)
+  indiv.fitness = f
+  indiv
+end
+
+function _eval_indiv_fitness!(indiv, obj_fn::Function, genome_mapper::Function)
   # TODO KYS: vähän kluge, tiiä ees onko tarpeen. Heitä vittuun jahka homma etenee?
   # @assert isequal(indiv.fitness, Inf) "Evaluating individual that already has a fitness value"
-  indiv.fitness = obj_fn(genome_mapper(indiv.genome))
+  set_fitness(indiv, obj_fn(genome_mapper(indiv.genome)))
 end
 
 # HOX: jostain syystä koko paska kippaa jos Individual:illa tekee tän nimitempun.
@@ -24,7 +33,7 @@ end
 # Individual = _Individual2
 
 @inline function Base.hash(a::Individual, h::UInt)
-  hash(:Individual, h) |> @©(hash(a.genome)) |> @©(hash(a.fitness))
+  hash(:Individual, h) |> @>(hash(a.genome)) |> @>(hash(a.fitness))
 end
 
 @inline function Base.:(==)(a::Individual, b::Individual)
@@ -37,16 +46,21 @@ Base.@kwdef struct _Options
 
   initial_genome_min_len::Int = 256
   objective_fn::Function
-
-  # TODO HOX: rng???
-  # -> Random.default_rng() ei oo thread safe (koska se on task local), eli
-  # sitä ei voi vaan passailla ympäriinsä jos ei ihan tiiä mihin threadiin se joutuu
+  rng::Maybe{Random.AbstractRNG} = nothing
 end
 
 Options = _Options
 
+function _get_rng(o::Options)
+  if isnothing(o.rng)
+    Random.default_rng()
+  else
+    o.rng
+  end
+end
+
 mutable struct State{N,GenomeType<:AbstractArray}
-  genomes::SizedVector{N,GenomeType} # genomit
+  genomes::SizedVector{N,GenomeType}
   fitnesses::SizedVector{N,Float64}
 
   options::Options
@@ -83,56 +97,83 @@ end
   State{N}(genomes, opts, false)
 end
 
+@inline fitnesses(s::State) = s.fitnesses
+@inline genomes(s::State) = s.genomes
+
+# TODO: equality + hash State:lle
+
 const _StructVecIndiv = StructVector{Individual}
 
 #=
   genomes::SizedVector{N,GenomeType} # genomit
   fitnesses::SizedVector{N,Float64}
 =#
-individuals(genomes::AbstractArray{GenomeType}, fitnesses::AbstractArray{Float64}) where {GenomeType} =
+(individuals(genomes::AbstractArray{GenomeType}, fitnesses::AbstractArray{Float64})::AbstractArray{Individual}) where {GenomeType} =
   _StructVecIndiv((genomes, fitnesses))
 individuals(s::State{N}) where {N} = individuals(s.genomes, s.fitnesses)
 individuals_lazy(s::State{N}) where {N} = individuals(s) |> LazyRows
 individuals_lazy(genomes::AbstractArray{GenomeType}, fitnesses::AbstractArray{Float64}) where {GenomeType} =
-  individuals(genomes, fitnesses)
+  individuals(genomes, fitnesses) |> LazyRows
 
-function _initialize_population!(s::State{N,GT}, including::AbstractArray{GT}=GT[]) where {N,GT<:AbstractArray}
+function _generate_random_population!(opts::Options, pop::_SizedTypes{N,GT}, including::AbstractArray{GT}=GT[]) where {N,GT<:AbstractArray}
   including_len = length(including)
   @assert including_len ≤ N
-
-  pop = Vector{GT}(undef, N)
   copyto!(pop, including)
   let left_to_generate = N - including_len
     if left_to_generate > 0
-      @inbounds for i in including_len+1:N
-        pop[i] = generate_random_individual(GT, s.options)
+      for i in including_len+1:N
+        @inbounds pop[i] = generate_random_individual(opts, GT)
       end
     end
   end
-
-  s.genomes = SizedVector{N}(pop)
-  nothing
+  pop
 end
 
-@inline function generate_random_individual(::Type{Vector{Bool}}, o::Options)
-  rand(Bool, rand(o.initial_genome_min_len:o.genome_max_len))
+function _generate_random_population!(s::State{N,GT}, including::AbstractArray{GT}=GT[]) where {N,GT<:AbstractArray}
+  pop = SizedVector{N,GT}(Vector{GT}(undef, N))
+  s.genomes = _generate_random_population!(s.options, pop, including)
+  s
+end
+
+@inline function generate_random_individual(o::Options, ::Type{Vector{Bool}})
+  rng = _get_rng(o)
+  rand(rng, Bool, rand(rng, o.initial_genome_min_len:o.genome_max_len))
 end
 
 function _init!(s::State{N}) where {N}
   @assert !s._initialized "GA.State already initialized"
-  _initialize_population!(s)
-  _evaluate_fitnesses!(s)
+  s = s |>
+      _generate_random_population! |>
+      _evaluate_fitnesses! # TODO: sortin pitäis tapahtua tässä kohdin
 end
 
-function _evaluate_fitnesses!(opts::Options, genomes::_SizedTypes{N, GenomeType}, fitnesses::_SizedTypes{N, Float64}) where {N, GenomeType}
+"""
+HUOM: mutatoi `fitnesses`iä
+"""
+function _evaluate_fitnesses!(opts::Options, genomes::_SizedTypes{N,GenomeType}, fitnesses::_SizedTypes{N,Float64}) where {N,GenomeType}
   # TODO: mieti tää evaluointikuvio
+  obj_fn = opts.objective_fn
+  Folds.foreach(individuals_lazy(genomes, fitnesses)) do indiv
+    # TODO: pitääköhän noi uudet fitnessit palauttaa jotenkin eikä setata suoriltaan? Eeeiii välttis? Tarviiko niitä?
+    indiv.fitness = obj_fn(indiv.genome)
+  end
+  fitnesses
+end
+
+function _sort_by_fitness!(s::State{N}) where N 
+  sorted_mask = sortperm(s.fitnesses)
+  s.fitnesses = @inbounds s.fitnesses[sorted_mask]
+  s.genomes = @inbounds s.genomes[sorted_mask]
+  s
 end
 
 function _evaluate_fitnesses!(s::State{N}) where {N}
-  Folds.map(individuals_lazy(s)) do indiv
-    # TODO: pitääköhän noi uudet fitnessit palauttaa jotenkin eikä setata suoriltaan
-    indiv.fitness = s.options.objective_fn(indiv.genome)
-  end
+  _evaluate_fitnesses!(s.options, s.genomes, s.fitnesses)
+  _sort_by_fitness!(s)
+  #=   Folds.map(individuals_lazy(s)) do indiv
+      indiv.fitness = s.options.objective_fn(indiv.genome)
+    end =#
+  s
 end
 
 """
@@ -153,17 +194,34 @@ function _run_generation!(s::State{N}) where {N}
   # päivitä best_solution_idx 
 end
 
+# TODO
+function optimize() end
+
 @testitem "GA State" begin
-  using StaticArrays
+  using Random
+  rng() = Xoshiro(666)
+  obj_fn(genome) = sum(genome)
+  opts() = GA.Options(objective_fn=obj_fn, genome_max_len=16, initial_genome_min_len=8, rng=rng())
+  
+  s = GA.State{5,Vector{Bool}}(opts()) |> GA._init!
+  s2 = GA.State{5,Vector{Bool}}(opts()) |> GA._init!
+  @test issorted(GA.fitnesses(s))
 
-  genome1 = Bool[1, 1, 1, 1]
-  fitness1 = 1.0
-  genome2 = Bool[0, 1]
-  fitness2 = 2.0
+  # TODO FIXME: parempi equality test
+  @test s |> GA.genomes == s2 |> GA.genomes && s |> GA.fitnesses == s2 |> GA.fitnesses
+  @test GA.genomes(s)[1] == Bool[1, 1, 0, 0, 0, 0, 0, 0]
+  @test GA.fitnesses(s)[1] == 2
+  @test GA.fitnesses(s)[1] ≤ GA.fitnesses(s)[2]
+  # using StaticArrays
 
-  obj_fn(genome) = 0.0
+  # genome1 = Bool[1, 1, 1, 1]
+  # fitness1 = 1.0
+  # genome2 = Bool[0, 1]
+  # fitness2 = 2.0
 
-  opts = GA.Options(objective_fn=obj_fn)
+  # obj_fn(genome) = 0.0
+
+  # opts = GA.Options(objective_fn=obj_fn)
 
   #=
    Musica.GA._Individual2[Musica.GA._Individual2(Bool[1, 1, 1, 1], 1.0), Musica.GA._Individual2(Bool[0, 1], 2.0)] == 
@@ -172,7 +230,7 @@ end
 
   =#
 
-  # FIXME testit
+  # TODO testit
 
   # pop = SizedVector{2}(genome1, genome2)
   # fits = SizedVector{2}(fitness1, fitness2)
