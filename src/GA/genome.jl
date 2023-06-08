@@ -1,4 +1,4 @@
-using ..Musica: @©, @£
+using ..Musica: @>, @<
 using Transducers, TestItems, Test
 
 #=
@@ -103,40 +103,38 @@ Good luck with your project! This kind of interdisciplinary work can be challeng
 
 # NOTE: tavallaan se DNA:n tulkkaus jossa kodonit -> aminohapot
 
-function _zero_pad_array(a::AbstractArray{T}, wanted_len) where {T}
-    a_len = length(a)
-    if a_len == wanted_len
-        return a
-    end
-    [a; zeros(T, wanted_len - a_len)]
+@inline function decode_genome(genome::AbstractArray, redundant_ratio::Rational{Int})
+    decode_genome(genome::AbstractArray, denominator(redundant_ratio), numerator(redundant_ratio))
 end
 
 ## TODO: vois muokata parsereita käyttämään kodoneita? Vai onks ihan pöljä idea? Tarviiks mihinkään?
-# Jotenkin tuntuu et 
-function decode_genome(genome::AbstractArray, codon_size::Integer=6, redundant_per_codon::Integer=2)
+@inline function decode_genome(genome::AbstractArray, codon_size::Integer=6, redundant_per_codon::Integer=2)
     Iterators.partition(genome, codon_size) |>
-    Map(@£(_droplast(redundant_per_codon, codon_size))) |>
-    Map(@£(_zero_pad_array(codon_size - redundant_per_codon)))
+    Map(
+        Tuple ∘
+        @<(_zero_pad_array(codon_size - redundant_per_codon)) ∘
+        @<(_droplast(redundant_per_codon, codon_size))
+    )
 end
 
-function decode_genome_flat(genome::AbstractArray, codon_size::Integer, redundant_per_codon::Integer)
+@inline function decode_genome_flat(genome::AbstractArray, codon_size::Integer, redundant_per_codon::Integer)
     @assert codon_size > redundant_per_codon "codon_size must be > redundant_per_codon"
-    decode_genome(genome, codon_size, redundant_per_codon) |> Cat() |> collect
+    decode_genome(genome, codon_size, redundant_per_codon) |> Cat()
 end
 
 
-function _droplast(arr::AbstractArray, n, max_len)
+@inline function _droplast(arr::AbstractArray, n, max_len)
     # n = 1, max_len = 4
     # arr_len == max_len
-    # [1, 2, 3, 4]
+    # arr = [1, 2, 3, 4]
     # --> tiputetaan vaan `n` kpl pois lopusta
     #
     # arr_len < max_len. diff = 1
-    # [1, 2, 3]
+    # arr = [1, 2, 3]
     # --> jos diff < n, tiputetaan `diff` kpl pois
     #
     # diff ≥ n. diff = 2
-    # [1, 2]
+    # arr = [1, 2]
     # --> ei tehä mitään
 
 
@@ -149,25 +147,33 @@ function _droplast(arr::AbstractArray, n, max_len)
             return arr
         end
     end
-    @inbounds arr[1:end-n]
+    @inbounds @view arr[1:end-n]
 end
+
+@inline function _zero_pad_array(a::AbstractArray{T}, wanted_len) where {T}
+    a_len = length(a)
+    if a_len == wanted_len
+        return a
+    end
+    [a; zeros(T, wanted_len - a_len)]
+end
+
 
 
 @testitem "genome mappings" begin
     genome = 1.0:14.0 |> collect
-    @test GA.decode_genome(1:15 |> collect, 6, 2) |> collect == [[1, 2, 3, 4], [7, 8, 9, 10], [13, 14, 15, 0]]
-
+    @test GA.decode_genome(1:15 |> collect, 6, 2) |> collect == [(1, 2, 3, 4), (7, 8, 9, 10), (13, 14, 15, 0)]
     @test GA.decode_genome(1:16, 6, 2) |> collect ==
           GA.decode_genome(1:17, 6, 2) |> collect ==
           GA.decode_genome(1:18, 6, 2) |> collect
 
     # [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14]]
-    @test GA.decode_genome_flat(genome, 4, 1) == [1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 9.0, 10.0, 11.0, 13.0, 14.0, 0.0]
+    @test GA.decode_genome_flat(genome, 4, 1) |> collect == [1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 9.0, 10.0, 11.0, 13.0, 14.0, 0.0]
 
     # 1:15 -> [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14, 15]]
     # 1:16 -> [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14, 15]]
     # koska 16 on sopivasti just ton vikan kodonin roska
-    @test GA.decode_genome_flat(1:15, 4, 1) == GA.decode_genome_flat(1:16, 4, 1)
+    @test GA.decode_genome_flat(1:15, 4, 1) |> collect == GA.decode_genome_flat(1:16, 4, 1) |> collect
 
 end
 
