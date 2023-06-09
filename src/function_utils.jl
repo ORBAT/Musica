@@ -24,6 +24,11 @@ Compose `fn` with itself `times` times
   end
 end
 
+@testitem "repeated" begin
+  _fn(x) = 2x
+  @test Musica.repeated_compose(_fn, 5)(5) == Musica.repeated_iter(_fn, 5)(5)
+end
+
 # HUOM: repeated_compose:n palauttama funkkari on reilusti nopeampi ku repeated_fold:in, mutta
 # sen composen kasaaminen kestää ***1000x*** kauemmin esim. jos times=30
 @inline repeated_compose(fn, times) = ∘(fill(fn, times)...)
