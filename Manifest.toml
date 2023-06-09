@@ -2,7 +2,7 @@
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "6f5ebf57ef67532e3e0b4fcff5947321c8fe058d"
+project_hash = "1ff3db7dd967e6929fe6c73740b9a5d3884df92c"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -88,6 +88,14 @@ version = "0.1.29"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[[deps.AutoHashEqualsCached]]
+deps = ["Rematch"]
+git-tree-sha1 = "5ec8345b3f56a405df8d6961a5b917cd345272ec"
+repo-rev = "main"
+repo-url = "https://github.com/JuliaServices/AutoHashEqualsCached.jl"
+uuid = "887ad303-ad3a-4bc5-965e-507c643d6945"
+version = "0.1.1"
 
 [[deps.BangBang]]
 deps = ["Compat", "ConstructionBase", "InitialValues", "LinearAlgebra", "Requires", "Setfield", "Tables"]
@@ -1002,6 +1010,12 @@ deps = ["SHA", "Scratch"]
 git-tree-sha1 = "90bc7a7c96410424509e4263e277e43250c05691"
 uuid = "05181044-ff0b-4ac5-8273-598c1e38db00"
 version = "1.0.0"
+
+[[deps.Rematch]]
+deps = ["MacroTools"]
+git-tree-sha1 = "dbe7e09d86545b2e78b9307559f2560744f34db4"
+uuid = "bfecab0d-fd4d-5014-a23f-56c5fae6447a"
+version = "0.3.3"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
