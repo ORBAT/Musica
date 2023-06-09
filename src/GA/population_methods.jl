@@ -144,3 +144,46 @@ Base.@propagate_inbounds function _randomize_mask_position(mask, max_index, rng)
   offset = start_idx - mask[1]
   mask .+ offset
 end
+
+#= abstract type AbstractMutation end
+struct PointMutation <: AbstractMutation end
+struct InsertMutation <: AbstractMutation end
+struct DeleteMutation <: AbstractMutation end
+
+Base.Base.@propagate_inbounds function mutate!(PointMutation, genome::AbstractArray{Bool}, idx; kw...)::Tuple{AbstractArray{Bool},Int}
+  genome[idx] = !genome[idx]
+  genome, idx + 1
+end
+
+Base.Base.@propagate_inbounds function mutate!(InsertMutation, genome::AbstractArray{Bool}, idx;
+  genome_max_len, mut_segment_max_len, restkw...)::AbstractArray{Bool}
+
+end
+
+ =#
+#= function mutate_point!(genome::AbstractArray{Bool};kw...)::AbstractArray{Bool}
+  idx = rand(1:length(genome))
+  @inbounds genome[idx] = @inbounds !genome[idx]
+  genome
+end
+
+function mutate_insert(genome::AbstractArray;mut_segment_max_len,genome_max_len)
+
+end =#
+
+
+# HOX TODO: mutaatiotyypit
+#=
+Point mutation (Substitution): This is a change in a single base pair in the DNA sequence. In the context of a genetic algorithm, this would correspond to changing a single element in your array or list.
+
+Insertion: This is when one or more new base pairs are inserted into the DNA sequence. In a genetic algorithm, this would mean adding one or more new elements at a random location in your array or list.
+
+Deletion: This is when one or more base pairs are removed from the DNA sequence. Similarly, in a genetic algorithm, this would involve removing one or more elements from your array or list.
+
+Inversion: In biology, this refers to a segment of DNA that is flipped in orientation relative to the rest of the chromosome. In a genetic algorithm, this could be implemented as reversing a section of your list or array.
+
+Translocation: In a genome, this involves moving a segment of DNA from one location to another, either within the same chromosome or to a different chromosome. For a genetic algorithm, you could implement this as moving a segment of your array or list from one location to another.
+
+Duplication (or amplification): This refers to a piece of DNA that is copied one or more times. In the context of a genetic algorithm, this could be implemented as duplicating a segment of your list or array.
+
+=#
