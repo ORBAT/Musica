@@ -1,6 +1,8 @@
 using Transducers
 using Transducers: start, inner, @next, wrap, unwrap, complete, Eduction
 
+const Maybe{T} = Union{T,Nothing}
+
 _Collectable = Union{Transducers.Foldable, AbstractRange}
 
 @inline maybe_collect(x) = x
