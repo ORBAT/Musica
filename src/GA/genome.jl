@@ -101,22 +101,26 @@ Good luck with your project! This kind of interdisciplinary work can be challeng
 =#
 
 
+default_codon_size() = 6
+default_redundant_per_codon() = 2
+
 # NOTE: tavallaan se DNA:n tulkkaus jossa kodonit -> aminohapot
 
 ## TODO: vois muokata parsereita käyttämään kodoneita? Vai onks ihan pöljä idea? Tarviiks mihinkään?
-@inline function decode_genome(genome::AbstractArray, codon_size::Integer=6, redundant_per_codon::Integer=2)::Transducers.Eduction
+@inline function (decode_genome(genome, codon_size::Integer=default_codon_size(), redundant_per_codon::Integer=default_redundant_per_codon())::Transducers.Eduction)
     Iterators.partition(genome, codon_size) |>
-    Map(
-        Tuple ∘
+    MapCat(
         @<(_zero_pad_array(codon_size - redundant_per_codon)) ∘
         @<(_droplast(redundant_per_codon, codon_size))
     )
 end
 
-@inline function decode_genome_flat(genome::AbstractArray, codon_size::Integer, redundant_per_codon::Integer)
+@deprecate decode_genome_flat(genome, codon_size, redundant_per_codon) decode_genome(genome, codon_size, redundant_per_codon)
+#= @inline function decode_genome_flat(genome, codon_size::Integer=default_codon_size(), redundant_per_codon::Integer=default_redundant_per_codon())
     @assert codon_size > redundant_per_codon "codon_size must be > redundant_per_codon"
-    decode_genome(genome, codon_size, redundant_per_codon) |> Cat()
-end
+    # decode_genome(genome, codon_size, redundant_per_codon) |> Cat()
+    decode_genome(genome, codon_size, redundant_per_codon)
+end =#
 
 
 @inline function _droplast(arr::AbstractArray, n, max_len)
@@ -135,6 +139,7 @@ end
 
 
     arr_len = length(arr)
+    @assert arr_len ≤ max_len
     if arr_len != max_len
         len_diff = max_len - arr_len
         if len_diff < n
@@ -143,7 +148,7 @@ end
             return arr
         end
     end
-    @inbounds @view arr[1:end-n]
+    @inbounds arr[1:end-n]
 end
 
 @inline function _zero_pad_array(a::AbstractArray{T}, wanted_len) where {T}
@@ -154,22 +159,36 @@ end
     [a; zeros(T, wanted_len - a_len)]
 end
 
+struct DecodedGenome{CodonLen,NRedundant,OrigT}
+    genome::OrigT
+end
 
+# using ..Musica
+# Musica.@forward DecodedGenome.genome (Base.size, Base.getindex, Base.setindex!, Base.firstindex, Base.lastindex, Base.iterate,
+# Base.length, Base.axes, eltype, Base.IteratorSize, Base.IteratorEltype)
+
+decoded_codon_len(::Type{DecodedGenome{CL,NR}}) where {CL,NR} = CL - NR
+decoded_codon_len(v::DecodedGenome{CL,NR}) where {CL,NR} = decoded_codon_len(DecodedGenome{CL,NR})
+
+# function (dg::DecodedGenome{CL,NR})() where {CL,NR} 
+#     decode_genome(dg.genome, )
+# end
 
 @testitem "genome mappings" begin
-    genome = 1.0:14.0 |> collect
-    @test GA.decode_genome(1:15 |> collect, 6, 2) |> collect == [(1, 2, 3, 4), (7, 8, 9, 10), (13, 14, 15, 0)]
+    @test GA.decode_genome(1:15 |> collect, 6, 2) |> collect ==
+          [
+        1, 2, 3, 4,
+        7, 8, 9, 10,
+        13, 14, 15, 0]
+
     @test GA.decode_genome(1:16, 6, 2) |> collect ==
           GA.decode_genome(1:17, 6, 2) |> collect ==
           GA.decode_genome(1:18, 6, 2) |> collect
 
-    # [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14]]
-    @test GA.decode_genome_flat(genome, 4, 1) |> collect == [1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 9.0, 10.0, 11.0, 13.0, 14.0, 0.0]
-
-    # 1:15 -> [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14, 15]]
-    # 1:16 -> [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14, 15]]
-    # koska 16 on sopivasti just ton vikan kodonin roska
-    @test GA.decode_genome_flat(1:15, 4, 1) |> collect == GA.decode_genome_flat(1:16, 4, 1) |> collect
+    let genome = 1.0:14.0 |> collect
+        # [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14]]
+        @test GA.decode_genome(genome, 4, 1) |> collect == [1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 9.0, 10.0, 11.0, 13.0, 14.0, 0.0]
+    end
 
 end
 
