@@ -1,15 +1,11 @@
-using TestItems, Test, Transducers, StaticArrays, Revise, BenchmarkTools, StatsBase, StructArrays
+using TestItems, Test, Transducers, StaticArrays, Revise, BenchmarkTools, StatsBase, StructArrays, Random
+
+# __enable_debug()
 
 # BenchmarkTools.DEFAULT_PARAMETERS.samples = 30000
 
 includet("src/Musica.jl")
 using .Musica
-
-# let prefix = "src/", ext = ".jl", files_to_track = ["CA", "collection_utils", "function_utils", "macros", "Neuron", "optimize", "parsing"]
-#   foreach(files_to_track) do filename
-#     Revise.track(Musica, prefix * filename * ext)
-#   end
-# end
 
 function _track(m::Module, path::String)
   files = [filename for filename in readdir(path, join=true, sort=false) if splitext(filename)[2] === ".jl"]
