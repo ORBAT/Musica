@@ -1,7 +1,7 @@
 using Transducers, StaticArrays, TestItems, Test, Printf
 
 
-const _SizedTypes{Len, T} = Union{StaticVector{Len,T},SizedVector{Len,T}}
+const _SizedTypes{Len,T} = Union{StaticVector{Len,T},SizedVector{Len,T}}
 
 """
     Row{NStates,Len,T,C<:AbstractArray}
@@ -13,44 +13,75 @@ Is a subtype of `AbstractVector` and should implement the whole interface for it
 struct Row{NStates,Len,T,C<:AbstractArray{T}} <: AbstractVector{T}
   coll::C
 
+  # TODO FIXME: puljaa tää niin että T<:Union{Unsigned,Bool}
+
   function Row{NS,L,T,C}(c::C) where {NS,L,T,C<:AbstractArray{T}}
-    @assert length(c) == L
     new{NS,L,T,C}(c)
   end
 
-  function Row{NS,L,T,C}(c::C) where {NS,L,T,C<:_SizedTypes{L, T}}
-    new{NS,L,T,C}(c)
-  end
-
-
-  """
-  Create a new `Row` from a `StaticVector` or a `SizedVector`.
-  """
-  function Row{NStates}(c::C) where {NStates,Len,T,C<:_SizedTypes{Len, T}}
-    new{NStates,Len,T,C}(c)
-  end
-
-  """
-  Create a new `Row` from any `AbstractArray` `c`. Checks that `c`'s length is equal to `Len`
-  """
-  function Row{NStates,Len}(c::C) where {NStates,Len,T,C<:AbstractArray{T}}
-    # @debug "Row generic constr"
-    @assert length(c) == Len
-    new{NStates,Len,T,C}(c)
-  end
 end
 
 export Row
 
-function Base.show(io::IO, row::Row{NS,W}) where {NS,W}
-  print(io, "Row{", NS, ",", W, "}(", row.coll, ")")
+function Row{2,L,T}(c::C) where {L,T<:Union{Signed,Unsigned},C<:AbstractArray{T}}
+  # TODO FIXME: poista tää @warn-blokki sit ku tätä ei enimmäkseen tapahdu
+  @warn begin
+    t = join(_stacktrace(5), "\n")
+    "Row{2,$L,$T,$C}: binary row constructor called with numeric T\n$t"
+  end
+  dest = similar(c, Bool)
+  Row{2,L,Bool,typeof(dest)}(copyto!(dest, c))
+end
+
+function Row{NS,L,T}(c::C) where {NS,L,T,C}
+  Row{NS,L,T,C}(c)
+end
+
+function Row{NS,L,T}(c::C) where {NS,L,T<:Signed,C}
+  UT = unsigned(T)
+  new_c = convert(AbstractArray{UT}, c)
+  # TODO FIXME: poista tää @warn-blokki sit ku tätä ei enimmäkseen tapahdu
+  @warn begin
+    t = join(_stacktrace(5), "\n")
+    "Row{$NS,$L,$T}(c): called with signed T $T, converting to $UT - $(typeof(new_c))\n$t"
+  end
+  Row{NS,L,UT,typeof(new_c)}(new_c)
+end
+
+
+@inline _condensed_str(coll::AbstractArray{Bool})::String = map(v -> v ? '1' : '0', coll) |> join
+@inline _condensed_str(coll::AbstractArray{<:Integer})::String = map(v -> '1' + (v - 1), coll) |> join
+
+function Base.show(io::IO, row::Row{NS,W,T}) where {NS,W,T<:Union{Bool, Unsigned}}
+  print(io, "Row{", NS, ",", W, ",", T, "}(", _condensed_str(row.coll), ")")
+end
+
+function Base.show(io::IO, row::Row{NS,W,T}) where {NS,W,T}
+  print(io, "Row{", NS, ",", W, ",", T, "}(", row.coll, ")")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", row::Row{NS,W}) where {NS,W}
-  print(io, "Row{", NS, ",", W, "}(", row.coll, ")")
+  show(io, row)
 end
 
-@inline Row{NS}(coll) where {NS} = Row{NS, length(coll)}(coll)
+"""
+Create a new `Row` from a `StaticVector` or a `SizedVector`.
+"""
+@inline function Row{NStates}(c::C) where {NStates,Len,T,C<:_SizedTypes{Len,T}}
+  Row{NStates,Len,T}(c)
+end
+
+"""
+Create a new `Row` from any `AbstractArray` `c`. Checks that `c`'s length is equal to `Len`
+"""
+@inline function Row{NStates,Len}(c::C) where {NStates,Len,T,C<:AbstractArray{T}}
+  # @debug "Row generic constr"
+  @assert length(c) == Len
+  Row{NStates,Len,T}(c)
+end
+
+
+@inline Row{NS}(coll::AbstractArray) where {NS} = Row{NS,length(coll)}(coll)
 
 @inline Base.IndexStyle(::Type{Row{NS,L,T,C}}) where {NS,L,T,C} = Base.IndexStyle(C)
 
@@ -59,7 +90,7 @@ end
   # SizedVector{Len, Bool, Vector{Bool}} eikä SizedVector{Len, Bool, BitVector}
   c = similar(r.coll.data)
   # @debug "Base.similar(Row) with SizedVector r.coll=$(typeof(r.coll)) c=$(typeof(c))"
-  Row{NStates,Len}(SizedVector{Len}(c))
+  Row{NStates}(SizedVector{Len}(c))
 end
 
 @inline function Base.similar(r::Row{NStates,Len,T,C}) where {NStates,Len,T,C}
@@ -70,9 +101,10 @@ end
 
 
 """
+    Base.convert(::Type{Row{N,L,T,CS}}, x::Row{N,L,T,CM}) where {N,L,T,CS<:SVector{L,T},CM<:MVector{L,T}}
 Convert a `Row` backed by a `MVector` to one backed by an `SVector`.
 """
-@inline function Base.convert(::Type{Row{N,L,T,CS}}, x::Row{N,L,T,CM}) where {N,L,T,CS<:SVector{L, T}, CM<:MVector{L, T}}
+@inline function Base.convert(::Type{Row{N,L,T,CS}}, x::Row{N,L,T,CM}) where {N,L,T,CS<:SVector{L,T},CM<:MVector{L,T}}
   Row{N,L,T,CS}(SVector{L}(x))
 end
 
@@ -83,7 +115,7 @@ end
   Row{NStates,Len}(c)
 end
  =#
- 
+
 @testitem "Row" begin
   using StaticArrays
   bv = SizedVector{4}(ones(Bool, 4))
@@ -274,7 +306,7 @@ Return a `Row{2,N}` that contains `n` 1's. Little-endian, padded to length `N`
 
 ```jldoctest
 julia> num_to_ones(6, Val{8})
-Row{2,8}(Bool[1, 1, 1, 1, 1, 1, 0, 0])
+Row{2,8,Bool}(11111100)
 ```
 """
 @inline function num_to_ones(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
@@ -284,17 +316,17 @@ end
 
 export num_to_ones
 
-@inline function num_to_row(n::Integer, _row_len::Type{Val{L}})::Row{2,L} where {L}
-  Row{2,L}(digits(n; base=2, pad=L))
+@inline function num_to_row(n::Integer, ::Type{Val{RowLen}})::Row{2,RowLen} where {RowLen}
+  Row{2,RowLen}(digits(Bool, n; base=2, pad=RowLen))
 end
 
-@inline function num_to_row(n::Integer, _base::Type{Val{Base}}, _row_len::Type{Val{L}})::Row{2,L} where {L,Base}
-  Row{Base,L}(digits(n; base=Base, pad=L))
+@inline function num_to_row(n::Integer, ::Type{Val{Base}}, ::Type{Val{RowLen}})::Row{2,RowLen} where {RowLen,Base}
+  Row{Base,RowLen}(digits(n; base=Base, pad=RowLen))
 end
 
 export num_to_row
 
-@inline (Base.count_ones(r::T)::Int) where {T<:Union{AbstractArray{Bool}, Row}} = sum(filter(==(1), r))
+@inline (Base.count_ones(r::T)::Int) where {T<:Union{AbstractArray{Bool},Row}} = sum(filter(==(1), r))
 
 @testitem "num_to_ones" begin
   @test_throws AssertionError num_to_ones(-1, Val{8})
@@ -333,4 +365,9 @@ export num_to_gray_row
   @test row_from_gray(num_to_row(10, row_width)) == 12
   @test row_from_gray(num_to_row(1, row_width)) == 1
   @test num_to_gray_row(12, row_width) == num_to_row(10, row_width)
+end
+
+function _stacktrace(top_n, remove_first=5)
+  trace = stacktrace()[remove_first:end]
+  trace[1:min(length(trace), top_n)]
 end
