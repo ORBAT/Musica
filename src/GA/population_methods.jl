@@ -5,24 +5,44 @@ using ..Musica: _SizedTypes
 palauttaa 
     [(parent_a1, parent_b1), (parent_a2, parent_b2), [...], (parent_an, parent_bn)]
 """
-function select_parents(population::AbstractArray{Indiv}, n; tournament_size=3, rng=Random.default_rng())::AbstractArray{NTuple{2,Indiv}} where Indiv
+function select_parents(population::AbstractArray{Indiv}, n; tournament_size=2, rng=Random.default_rng())::AbstractArray{NTuple{2,Indiv}} where {Indiv}
   # HOX: population pitää olla fitnessin mukaan järjestyksessä, paras eka
   # TODO FIXME: poista tää assert jahka homma pelittää
   @assert issorted(population; by=fitness)
   # (Indiv, Indiv)[]
   parents = Array{NTuple{2,Indiv}}(undef, n)
   foreach(1:n) do i
-    @inbounds parents[i] = tournament_select(population, Val{2}; tournament_size, rng)
+    @inbounds parents[i] = tournament_select_two(population; tournament_size, rng)
   end
-  # map(Tuple, reshape(flat_parents, (2,n)))
   parents
 end
 
-function tournament_select(individuals::AbstractArray{T}, ::Type{Val{n}}; tournament_size, rng)::NTuple{n,T} where {T,n}
+function _tournament_select_with_one_tournament(individuals::AbstractArray{T}, ::Type{Val{n}}; tournament_size, rng)::NTuple{n,T} where {T,n}
   # arvotaan `tournament_size` kpl indeksejä `individuals`ista. Ei toistoja, ja järjestyksessä pienin ensin
   idxs = StatsBase.sample(rng, 1:length(individuals), tournament_size; replace=false, ordered=true)
   # otetaan näistä indekseistä ekat n (eli parhaat `n` kpl), ja käytetään sitä maskina `individuals`ille --> turnauksen parhaat `n` kpl yksilöä
   @inbounds Tuple(individuals[idxs[1:n]])
+end
+
+function tournament_select_two(individuals::AbstractArray{T}; tournament_size, rng)::NTuple{2,T} where {T}
+  parent_a_idx = _tournament_select_idx(individuals; tournament_size, rng)
+  parent_b_idx = _tournament_select_idx(individuals; tournament_size, rng)
+  while (parent_a_idx == parent_b_idx)
+    parent_b_idx = _tournament_select_idx(individuals; tournament_size, rng)
+  end
+  @inbounds individuals[min(parent_a_idx, parent_b_idx)], individuals[max(parent_a_idx, parent_b_idx)]
+end
+
+# function tournament_select(individuals::AbstractArray{T}, ::Type{Val{1}}; tournament_size, rng)::T where {T}
+#   # arvotaan `tournament_size` kpl indeksejä `individuals`ista. Ei toistoja, ja järjestyksessä pienin ensin
+#   idxs = StatsBase.sample(rng, 1:length(individuals), tournament_size; replace=false, ordered=true)
+#   # otetaan näistä indekseistä eka eli paras, käytetään maskina `individuals`ille --> turnauksen paras yksilö
+#   @inbounds individuals[idxs[1]]
+# end
+
+function _tournament_select_idx(individuals::AbstractArray{T}; tournament_size, rng) where {T}
+  idxs = StatsBase.sample(rng, 1:length(individuals), tournament_size; replace=false, ordered=true)
+  @inbounds idxs[1]
 end
 
 
