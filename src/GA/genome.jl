@@ -101,25 +101,32 @@ Good luck with your project! This kind of interdisciplinary work can be challeng
 =#
 
 
-default_codon_size() = 6
+default_codon_length() = 6
 default_redundant_per_codon() = 2
+
+Base.@kwdef struct GenomeConfig
+    codon_length::Integer=6
+    redundant_per_codon::Integer = 2
+end
+
+
 
 # NOTE: tavallaan se DNA:n tulkkaus jossa kodonit -> aminohapot
 
 ## TODO: vois muokata parsereita käyttämään kodoneita? Vai onks ihan pöljä idea? Tarviiks mihinkään?
-@inline function (decode_genome(genome, codon_size::Integer=default_codon_size(), redundant_per_codon::Integer=default_redundant_per_codon())::Transducers.Eduction)
-    Iterators.partition(genome, codon_size) |>
+@inline function (decode_genome(genome, codon_length::Integer=default_codon_length(), redundant_per_codon::Integer=default_redundant_per_codon())::Transducers.Eduction)
+    Iterators.partition(genome, codon_length) |>
     MapCat(
-        @<(_zero_pad_array(codon_size - redundant_per_codon)) ∘
-        @<(_droplast(redundant_per_codon, codon_size))
+        @<(_zero_pad_array(codon_length - redundant_per_codon)) ∘
+        @<(_droplast(redundant_per_codon, codon_length))
     )
 end
 
-@deprecate decode_genome_flat(genome, codon_size, redundant_per_codon) decode_genome(genome, codon_size, redundant_per_codon)
-#= @inline function decode_genome_flat(genome, codon_size::Integer=default_codon_size(), redundant_per_codon::Integer=default_redundant_per_codon())
-    @assert codon_size > redundant_per_codon "codon_size must be > redundant_per_codon"
-    # decode_genome(genome, codon_size, redundant_per_codon) |> Cat()
-    decode_genome(genome, codon_size, redundant_per_codon)
+@deprecate decode_genome_flat(genome, codon_length, redundant_per_codon) decode_genome(genome, codon_length, redundant_per_codon)
+#= @inline function decode_genome_flat(genome, codon_length::Integer=default_codon_length(), redundant_per_codon::Integer=default_redundant_per_codon())
+    @assert codon_length > redundant_per_codon "codon_length must be > redundant_per_codon"
+    # decode_genome(genome, codon_length, redundant_per_codon) |> Cat()
+    decode_genome(genome, codon_length, redundant_per_codon)
 end =#
 
 
@@ -159,8 +166,9 @@ end
     [a; zeros(T, wanted_len - a_len)]
 end
 
-struct DecodedGenome{CodonLen,NRedundant,OrigT}
+struct DecodedGenome{CodonLen,NRedundant,OrigT,DecFn}
     genome::OrigT
+
 end
 
 # using ..Musica

@@ -53,10 +53,10 @@ Base.@kwdef struct Options
   genome_max_len::Int# = 2048
   initial_genome_min_len::Int# = 256
 
-  codon_size::Integer = 6
+  codon_length::Integer = 6
   redundant_per_codon::Integer = 2
 
-  mut_segment_mean_len::Int = codon_size # mean segment length in mutations
+  mut_segment_mean_len::Int = codon_length # mean segment length in mutations
   mut_segment_stdev::Float64 = 1.5
   mut_codon_p::Float64 = 0.005 # probability that a codon will mutate
   # mut_point_p::Float64 = 0.005
@@ -82,7 +82,7 @@ end
   hash(:Options, h) |>
   @>(hash(o.genome_max_len)) |>
   @>(hash(o.initial_genome_min_len)) |> 
-  @>(hash(o.codon_size)) |>
+  @>(hash(o.codon_length)) |>
   @>(hash(o.redundant_per_codon)) |> 
   @>(hash(o.mut_segment_mean_len)) |>
   @>(hash(o.mut_segment_stdev)) |>
@@ -96,7 +96,7 @@ end
 
 @inline function Base.:(==)(a::Options, b::Options)
   isequal(a.genome_max_len, b.genome_max_len) &&
-    isequal(a.initial_genome_min_len, b.initial_genome_min_len) && isequal(a.codon_size, b.codon_size) &&
+    isequal(a.initial_genome_min_len, b.initial_genome_min_len) && isequal(a.codon_length, b.codon_length) &&
     isequal(a.redundant_per_codon, b.redundant_per_codon) &&
     isequal(a.mut_segment_mean_len, b.mut_segment_mean_len) &&
     isequal(a.mut_segment_stdev, b.mut_segment_stdev) &&
@@ -237,7 +237,7 @@ function _evaluate_fitnesses!(opts::Options, genomes::_SizedTypes{N,GenomeType},
   # TODO: mieti tää evaluointikuvio
   obj_fn = opts.objective_fn
 
-  genome_decoder = @<(decode_genome(opts.codon_size, opts.redundant_per_codon))
+  genome_decoder = @<(decode_genome(opts.codon_length, opts.redundant_per_codon))
 
   Folds.foreach(individuals_lazy(genomes, fitnesses)) do indiv
     decoded = indiv.genome |> genome_decoder
