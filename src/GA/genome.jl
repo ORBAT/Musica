@@ -101,20 +101,45 @@ Good luck with your project! This kind of interdisciplinary work can be challeng
 =#
 
 
-default_codon_length() = 6
-default_redundant_per_codon() = 2
+default_genome_codon_length() = 6
+default_genome_redundant_per_codon() = 2
+default_genome_num_states() = 2
 
-Base.@kwdef struct GenomeConfig
-    codon_length::Integer=6
-    redundant_per_codon::Integer = 2
+Base.@kwdef struct GenomeOptions{NStates,CodonLen,NRedundant}
+    # kuinka monta "basea" genomissa on. Binäärikamassa num_states == 2. DNA:ssa num_states = 4 (A, C, G, T)
+    num_states::Integer = NStates
+    codon_length::Integer = CodonLen
+    redundant_per_codon::Integer = NRedundant
+    max_genome_length::Integer = 2048
 end
 
+function GenomeOptions(; num_states::Integer, codon_length::Integer, redundant_per_codon::Integer, restkw...)
+    GenomeOptions{num_states,codon_length,redundant_per_codon}(restkw...)
+end
 
+function Base.show(io::IO, opts::GenomeOptions{NS,CL,NR}) where {NS,CL,NR}
+
+end
+
+GenomeOptions() = GenomeOptions{default_genome_num_states(),
+    default_genome_codon_length(),
+    default_genome_redundant_per_codon()}()
+
+
+
+function decode_genome(opts::GenomeOptions, genome)::Transducers.Eduction
+    Iterators.partition(genome, opts.codon_length) |>
+    # genome |> Partition(opts.codon_length; flush=true) |> Map(copy) |>
+    MapCat(
+        @<(_zero_pad_array(opts.codon_length - opts.redundant_per_codon)) ∘
+        @<(_droplast(opts.redundant_per_codon, opts.codon_length))
+    )
+end
 
 # NOTE: tavallaan se DNA:n tulkkaus jossa kodonit -> aminohapot
 
 ## TODO: vois muokata parsereita käyttämään kodoneita? Vai onks ihan pöljä idea? Tarviiks mihinkään?
-@inline function (decode_genome(genome, codon_length::Integer=default_codon_length(), redundant_per_codon::Integer=default_redundant_per_codon())::Transducers.Eduction)
+@inline function (decode_genome(genome, codon_length::Integer=default_genome_codon_length(), redundant_per_codon::Integer=default_genome_redundant_per_codon())::Transducers.Eduction)
     Iterators.partition(genome, codon_length) |>
     MapCat(
         @<(_zero_pad_array(codon_length - redundant_per_codon)) ∘
@@ -166,21 +191,23 @@ end
     [a; zeros(T, wanted_len - a_len)]
 end
 
-struct DecodedGenome{CodonLen,NRedundant,OrigT,DecFn}
-    genome::OrigT
-
-end
-
-# using ..Musica
-# Musica.@forward DecodedGenome.genome (Base.size, Base.getindex, Base.setindex!, Base.firstindex, Base.lastindex, Base.iterate,
-# Base.length, Base.axes, eltype, Base.IteratorSize, Base.IteratorEltype)
-
-decoded_codon_len(::Type{DecodedGenome{CL,NR}}) where {CL,NR} = CL - NR
-decoded_codon_len(v::DecodedGenome{CL,NR}) where {CL,NR} = decoded_codon_len(DecodedGenome{CL,NR})
-
-# function (dg::DecodedGenome{CL,NR})() where {CL,NR} 
-#     decode_genome(dg.genome, )
+# function GenomeDecoder(opts::GenomeOptions, genome)
+#     Iterators.partition(genome, opts.codon_length) |>
+#     # genome |> Partition(opts.codon_length; flush=true) |> Map(copy) |>
+#     MapCat(
+#         @<(_zero_pad_array(opts.codon_length - opts.redundant_per_codon)) ∘
+#         @<(_droplast(opts.redundant_per_codon, opts.codon_length))
+#     )
 # end
+
+# struct GenomeDecoder{OrigT,DecFn}
+#     orig_genome::OrigT
+#     xf::DecFn
+# end
+
+#  (dg::GenomeDecoder{CL,NR})() where {CL,NR} 
+# #     decode_genome(dg.genome, )
+# # end
 
 @testitem "genome mappings" begin
     @test GA.decode_genome(1:15 |> collect, 6, 2) |> collect ==
