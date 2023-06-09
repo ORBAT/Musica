@@ -4,6 +4,11 @@ using TestItems, Test, Transducers, StaticArrays, Revise, BenchmarkTools, StatsB
 
 # BenchmarkTools.DEFAULT_PARAMETERS.samples = 30000
 
+xf_printer(label) = Map() do x
+  println(label, ": ", x)
+  return x  # just return it as-is
+end
+
 includet("src/Musica.jl")
 using .Musica
 
