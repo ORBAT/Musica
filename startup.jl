@@ -23,7 +23,7 @@ _track(Musica, "src/")
 _track(Musica.GA, "src/GA")
 
 function new_state(::Type{Val{L}}) where {L}
-  let bla = zeros(Int, L)
+  let bla = zeros(Bool, L)
     bla[1] = 1
     Row{2}(SizedVector{L}(bla))
   end
