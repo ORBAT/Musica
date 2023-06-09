@@ -103,12 +103,8 @@ Good luck with your project! This kind of interdisciplinary work can be challeng
 
 # NOTE: tavallaan se DNA:n tulkkaus jossa kodonit -> aminohapot
 
-@inline function decode_genome(genome::AbstractArray, redundant_ratio::Rational{Int})
-    decode_genome(genome::AbstractArray, denominator(redundant_ratio), numerator(redundant_ratio))
-end
-
 ## TODO: vois muokata parsereita käyttämään kodoneita? Vai onks ihan pöljä idea? Tarviiks mihinkään?
-@inline function decode_genome(genome::AbstractArray, codon_size::Integer=6, redundant_per_codon::Integer=2)
+@inline function decode_genome(genome::AbstractArray, codon_size::Integer=6, redundant_per_codon::Integer=2)::Transducers.Eduction
     Iterators.partition(genome, codon_size) |>
     Map(
         Tuple ∘
