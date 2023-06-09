@@ -2,31 +2,38 @@ using Transducers, TestItems
 
 const IntArray = AbstractArray{<:Integer}
 
+struct Chunked{N} end
+Chunked(n) = Chunked{n}
+
+
+
 """
 Generally a `Parser` takes an `AbstractArray` input, parses it and returns leftover input and the result of the parse.
 
 See [`parser`](@ref) methods
 """
-struct Parser{In,Out} <: Function
+struct Parser{Out} <: Function
   fn::Function
 end
 
 function Parser(fn, ::Type{Out}) where {Out}
-  Parser(fn, IntArray, Out)
-end
-
-function Parser(fn, ::Type{In}, ::Type{Out}) where {In, Out}
-  Parser{In, Out}(fn)
+  Parser{Out}(fn)
 end
 
 # HOX FIXME tää on se vanha malli missä parserin inputti oli aina vaan bittejä
 function Parser(fn)
   Parser(fn, Nothing)
 end
-
+Transducers._bottom_state_type
 # HOX: se wanha malli taas
-function (p::Parser)(bits::T) where {T<:IntArray}
-  p.fn(bits)
+function (p::Parser{Nothing})(inp)
+  inp |> Cat() |> p.fn
+end
+
+const _EductionOr{T} = Union{Transducers.Eduction,T}
+
+function (p::Parser)(inp)::Tuple{_EductionOr{AbstractArray},_EductionOr{AbstractArray}}
+  inp |> p.fn
 end
 
 # TODO: jotain näitä allaolevia mä varmaan tarviin, mut ehkä turha tehdä vielä ennen ku tiiän tarkalleen mitä haluun :P
@@ -79,7 +86,7 @@ end
 end
  =#
 
-function parse_n_bits(input::T, n_bits) where {T<:IntArray}
+function parse_n_bits(input, n_bits)
   (input |> Drop(n_bits) |> collect, undigits(input |> Take(n_bits) |> collect))
 end
 
@@ -98,7 +105,35 @@ julia> Musica.parser(Musica.ParseUInt(2))([1,1,0])
 ParseUInt(nbits) = ParseUInt{nbits}
 
 @inline function parser(::Type{ParseUInt{NBits}}) where {NBits}
-  Parser(@£ parse_n_bits(NBits))
+  Parser(@<parse_n_bits(NBits))
+end
+
+xf_printer(label) =
+  Map() do x
+    println(label, ":", x," – ",typeof(x))
+    return x  # just return it as-is
+  end
+
+
+@inline function parser2(pui::Type{ParseUInt{NCodons}}) where {NCodons}
+  Parser(pui) do inp
+    (
+      inp |>  Drop(NCodons) |> xf_printer("parser2 left"),
+      inp |> Musica.LiftToArray() |>
+      Map(@<(Musica._take(NCodons))) |>
+      Map(x -> x |> Cat() |> collect) |>
+      Map(undigits)
+    )
+  end
+end
+
+function _take(a, n)
+  a_len = length(a)
+  if a_len ≤ n
+    a
+  else
+    @inbounds @view a[1:n]
+  end
 end
 
 @testitem "ParseUInt" begin
