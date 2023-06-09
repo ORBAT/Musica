@@ -1,7 +1,5 @@
 using Transducers, TestItems, Test, MacroTools
 
-using Lazy: iterated
-
 @inline _stable_typeof(x) = typeof(x)
 @inline _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
