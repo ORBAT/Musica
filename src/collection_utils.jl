@@ -1,14 +1,27 @@
-using Transducers
+using Transducers, TestItems
 using Transducers: start, inner, @next, wrap, unwrap, complete, Eduction
 
-const Maybe{T} = Union{T,Nothing}
+const Maybe{T} = Union{Union{T,Some{T}},Nothing}
 
 export Maybe
 
+@inline get_or_else(::Tuple{}, fallback::T) where T = fallback
 @inline get_or_else(::Nothing, fallback::T) where T = fallback
-@inline get_or_else(v::T, _fallback) where T = v
+@inline get_or_else(v::T, _fallback) where T = @inline get_value(v)
+
+"""
+
+"""
+function get_value end
+
+get_value() = throw(ArgumentError("No value arguments present"))
+get_value(x::Nothing, y...) = get_value(y...)
+get_value(x::Some, y...) = x.value
+get_value((x,)::NTuple{1}, y...) = x
+get_value(x::Any, y...) = x
 
 @testitem "Maybe" begin
+  Base.map
   using Random
   struct Testes
     v::Maybe{AbstractRNG}
@@ -59,4 +72,12 @@ end
   buffer, iresult = Transducers.unwrap(rf, result)
   iresult = Transducers.@next(Transducers.inner(rf), iresult, buffer)
   Transducers.complete(Transducers.inner(rf), iresult)
+end
+
+function take(a, n)
+  if length(a) ≤ n
+    a
+  else
+    @inbounds @view a[1:n]
+  end
 end
