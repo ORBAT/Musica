@@ -3,6 +3,23 @@ using Transducers: start, inner, @next, wrap, unwrap, complete, Eduction
 
 const Maybe{T} = Union{T,Nothing}
 
+export Maybe
+
+@inline get_or_else(::Nothing, fallback::T) where T = fallback
+@inline get_or_else(v::T, _fallback) where T = v
+
+@testitem "Maybe" begin
+  using Random
+  struct Testes
+    v::Maybe{AbstractRNG}
+  end
+
+  @test Musica.get_or_else(Testes(Xoshiro(666)).v, Xoshiro(1)) == Xoshiro(666)
+  @test Musica.get_or_else(Testes(nothing).v, Xoshiro(1)) == Xoshiro(1)
+end
+
+export get_or_else
+
 _Collectable = Union{Transducers.Foldable, AbstractRange}
 
 @inline maybe_collect(x) = x

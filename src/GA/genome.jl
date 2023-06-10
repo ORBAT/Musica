@@ -1,5 +1,5 @@
-using ..Musica: @>, @<
-using Transducers, TestItems, Test
+using ..Musica
+using Transducers, TestItems, Test, Parameters
 
 #=
 # NOTE: genomin mietintää
@@ -101,51 +101,94 @@ Good luck with your project! This kind of interdisciplinary work can be challeng
 =#
 
 
-default_genome_codon_length() = 6
-default_genome_redundant_per_codon() = 2
-default_genome_num_states() = 2
+const default_genome_codon_length::Integer = 6
+const default_genome_redundant_per_codon::Integer = 2
+const default_max_codons::Integer = 400
 
-Base.@kwdef struct GenomeOptions{NStates,CodonLen,NRedundant}
+"""
+HUOM: `ElemType` on yksittäisen "emäksen" tyyppi. Kun `NStates` == 2 niin defaultti on `Bool`
+"""
+@with_kw struct GenomeOptions{ElemType,CodonLen,NRedundant,NStates}
     # kuinka monta "basea" genomissa on. Binäärikamassa num_states == 2. DNA:ssa num_states = 4 (A, C, G, T)
-    num_states::Integer = NStates
-    codon_length::Integer = CodonLen
-    redundant_per_codon::Integer = NRedundant
-    max_genome_length::Integer = 2048
+    max_codons::Integer = default_max_codons
+    min_codons::Integer = 3
+
+    function GenomeOptions{ElemType,CodonLen,NRedundant,NStates}(
+        max_codons,
+        min_codons) where {ElemType,CodonLen,NRedundant,NStates}
+        @assert NRedundant < CodonLen
+        @assert max_codons ≥ min_codons
+        new{ElemType,CodonLen,NRedundant,NStates}(max_codons, min_codons)
+    end
 end
 
-function GenomeOptions(; num_states::Integer, codon_length::Integer, redundant_per_codon::Integer, restkw...)
-    GenomeOptions{num_states,codon_length,redundant_per_codon}(restkw...)
+function GenomeOptions{CodonLen,NRedundant}(; restkw...) where {CodonLen,NRedundant}
+    GenomeOptions{Bool,CodonLen,NRedundant,2}(; restkw...)
 end
 
-function Base.show(io::IO, opts::GenomeOptions{NS,CL,NR}) where {NS,CL,NR}
-
+"""
+Defaulttina `ElemType` `Bool`, 
+"""
+function GenomeOptions(; restkw...)
+    GenomeOptions{Bool,default_genome_codon_length,default_genome_redundant_per_codon,2}(; restkw...)
 end
 
-GenomeOptions() = GenomeOptions{default_genome_num_states(),
-    default_genome_codon_length(),
-    default_genome_redundant_per_codon()}()
+# function Base.show(io::IO, opts::GenomeOptions{NS,CL,NR}) where {NS,CL,NR}
 
+# end
 
+@inline genome_max_length(opts::GenomeOptions{NS,CodonLen}) where {NS,CodonLen} = CodonLen * opts.max_codons
+@inline genome_min_length(opts::GenomeOptions{NS,CodonLen}) where {NS,CodonLen} = CodonLen * opts.min_codons
 
-function decode_genome(opts::GenomeOptions, genome)::Transducers.Eduction
-    Iterators.partition(genome, opts.codon_length) |>
-    # genome |> Partition(opts.codon_length; flush=true) |> Map(copy) |>
-    MapCat(
-        @<(_zero_pad_array(opts.codon_length - opts.redundant_per_codon)) ∘
-        @<(_droplast(opts.redundant_per_codon, opts.codon_length))
+function clamp_genome_length!(opts::GenomeOptions{T,CL,NR}, genome) where {T,CL,NR}
+    # TODO: minimin hanskaus
+    let max_len = genome_max_length(opts)
+        if length(genome) > max_len
+            resize!(genome, max_len)
+        end
+    end
+    genome
+end
+
+function genome_length_extrema(go::GenomeOptions{NS,CL}) where {NS,CL}
+    go.min_codons * CL, genome_max_length(go)
+end
+
+@inline active_codon_length(::Type{<:GenomeOptions{T,CodonLen,NRedundant}}) where {T,CodonLen,NRedundant} = CodonLen - NRedundant
+@inline active_codon_length(::T) where {T<:GenomeOptions} = active_codon_length(T)
+
+@inline redundant_per_codon(::Type{<:GenomeOptions{T,CL,NR}}) where {T,CL,NR} = NR
+@inline redundant_per_codon(::GO) where {GO<:GenomeOptions} = redundant_per_codon(GO)
+
+@inline codon_length(::Type{<:GenomeOptions{T,CodonLen,NRedundant}}) where {T,CodonLen,NRedundant} = CodonLen
+@inline codon_length(::T) where {T<:GenomeOptions} = codon_length(T)
+
+# function (genome_decoder(opts::GenomeOptions{2,CL,NR})::Function) where {CL,NR}
+#     Partition()
+# end
+
+function (genome_to_codons(opts::GenomeOptions{T,CL}, genome)::Transducers.Eduction) where {T,CL}
+    genome |> Partition(CL; flush=true) |> Map(copy)
+end
+
+function decode_genome(opts::GenomeOptions{T,CL,NR}, genome)::Transducers.Eduction where {T,CL,NR}
+    genome |> @>(genome_to_codons(opts)) |>
+    Map(
+        @<(_zero_pad_array(active_codon_length(opts))) ∘
+        @<(_droplast(NR, CL))
     )
 end
 
 # NOTE: tavallaan se DNA:n tulkkaus jossa kodonit -> aminohapot
 
 ## TODO: vois muokata parsereita käyttämään kodoneita? Vai onks ihan pöljä idea? Tarviiks mihinkään?
-@inline function (decode_genome(genome, codon_length::Integer=default_genome_codon_length(), redundant_per_codon::Integer=default_genome_redundant_per_codon())::Transducers.Eduction)
-    Iterators.partition(genome, codon_length) |>
-    MapCat(
-        @<(_zero_pad_array(codon_length - redundant_per_codon)) ∘
-        @<(_droplast(redundant_per_codon, codon_length))
-    )
-end
+# @inline function (decode_genome(genome, codon_length::Integer=default_genome_codon_length, redundant_per_codon::Integer=default_genome_redundant_per_codon)::Transducers.Eduction)
+#     Iterators.partition(genome, codon_length) |>
+#     MapCat(
+#         @<(_zero_pad_array(codon_length - redundant_per_codon)) ∘
+#         @<(_droplast(redundant_per_codon, codon_length))
+#     )
+# end
 
 @deprecate decode_genome_flat(genome, codon_length, redundant_per_codon) decode_genome(genome, codon_length, redundant_per_codon)
 #= @inline function decode_genome_flat(genome, codon_length::Integer=default_codon_length(), redundant_per_codon::Integer=default_redundant_per_codon())
@@ -210,19 +253,24 @@ end
 # # end
 
 @testitem "genome mappings" begin
-    @test GA.decode_genome(1:15 |> collect, 6, 2) |> collect ==
+    opts = GA.GenomeOptions()
+    @test GA.decode_genome(opts, 1:15 |> collect) |> collect ==
           [
-        1, 2, 3, 4,
-        7, 8, 9, 10,
-        13, 14, 15, 0]
+        [1, 2, 3, 4],
+        [7, 8, 9, 10],
+        [13, 14, 15, 0]]
 
-    @test GA.decode_genome(1:16, 6, 2) |> collect ==
-          GA.decode_genome(1:17, 6, 2) |> collect ==
-          GA.decode_genome(1:18, 6, 2) |> collect
+    @test GA.decode_genome(opts, 1:16) |> collect ==
+          GA.decode_genome(opts, 1:17) |> collect ==
+          GA.decode_genome(opts, 1:18) |> collect
 
     let genome = 1.0:14.0 |> collect
         # [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14]]
-        @test GA.decode_genome(genome, 4, 1) |> collect == [1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 9.0, 10.0, 11.0, 13.0, 14.0, 0.0]
+        @test GA.decode_genome(GA.GenomeOptions{4,1}(), genome) |> collect == 
+        [[1.0, 2.0, 3.0],
+        [5.0, 6.0, 7.0],
+        [9.0, 10.0, 11.0],
+        [13.0, 14.0, 0.0]]
     end
 
 end

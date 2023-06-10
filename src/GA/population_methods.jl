@@ -187,3 +187,20 @@ Translocation: In a genome, this involves moving a segment of DNA from one locat
 Duplication (or amplification): This refers to a piece of DNA that is copied one or more times. In the context of a genetic algorithm, this could be implemented as duplicating a segment of your list or array.
 
 =#
+
+Base.@kwdef struct MutationOptions
+  mut_segment_mean_len::Int = default_genome_codon_length # mean segment length in mutations
+  mut_segment_stdev::Float64 = 1.5
+  mut_codon_p::Float64 = 0.005 # probability that a codon will mutate
+  # mut_point_p::Float64 = 0.005
+  # mut_ins_p::Float64 = 0.005
+  # mut_del_p::Float64 = 0.005
+  #=
+
+  mut_rev_p::Float64 # prob. to reverse a segment of max len mut_segment_mean_len
+  mut_trans_p::Float64 # translocate a segment
+
+  mut_duplicate_p::Float64
+  =#
+
+end

@@ -23,6 +23,7 @@ macro forward(ex, fs)
     nothing)
 end
 
+export @forward
 
 macro _return_if_nothing(ex, varname)
   :(if isnothing($(esc(ex))) return $(esc(varname)), nothing; end)

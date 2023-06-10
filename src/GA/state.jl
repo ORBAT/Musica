@@ -1,6 +1,7 @@
 
 using StaticArrays, StructArrays, TestItems, Folds, Random
 using ..Musica: _SizedTypes, Maybe
+using ..Musica
 using Printf
 using AutoHashEqualsCached
 
@@ -22,10 +23,10 @@ function Base.show(io::IO, indiv::Individual{GT}) where {GT}
 end
 
 @inline fitness(indiv) = indiv.fitness
-@inline function set_fitness(indiv, f::Float64)
-  indiv.fitness = f
-  indiv
-end
+# @inline function set_fitness(indiv, f::Float64)
+#   indiv.fitness = f
+#   indiv
+# end
 
 # function _eval_indiv_fitness!(indiv, obj_fn::Function, genome_mapper::Function)
 #   # TODO KYS: vähän kluge, tiiä ees onko tarpeen. Heitä vittuun jahka homma etenee?
@@ -48,80 +49,56 @@ end
   isequal(a.fitness, b.fitness) && isequal(a.genome, b.genome)
 end =#
 
-Base.@kwdef struct Options
-  # kova raja genomin pituudelle
-  genome_max_len::Int# = 2048
-  initial_genome_min_len::Int# = 256
+@with_kw struct Options{GO<:GenomeOptions}
 
-  codon_length::Integer = 6
-  redundant_per_codon::Integer = 2
-
-  mut_segment_mean_len::Int = codon_length # mean segment length in mutations
-  mut_segment_stdev::Float64 = 1.5
-  mut_codon_p::Float64 = 0.005 # probability that a codon will mutate
-  # mut_point_p::Float64 = 0.005
-  # mut_ins_p::Float64 = 0.005
-  # mut_del_p::Float64 = 0.005
-  #=
-
-  mut_rev_p::Float64 # prob. to reverse a segment of max len mut_segment_mean_len
-  mut_trans_p::Float64 # translocate a segment
-
-  mut_duplicate_p::Float64
-  =#
+  genome_opts::GO = GenomeOptions()
+  mutation_opts::MutationOptions = MutationOptions()
 
 
   objective_fn::Function
-  rng::Maybe{Random.AbstractRNG}# = nothing
+  rng::Maybe{Random.AbstractRNG} = nothing
+end
+
+function Options(; genome_opts::GO=GenomeOptions(), restkw...) where {GO<:GenomeOptions}
+  Options{GO}(; genome_opts, restkw...)
 end
 
 # Options = _Options3
 
-@inline function Base.hash(o::Options, h::UInt)
-  # @info "Base.hash(Options)"
-  hash(:Options, h) |>
-  @>(hash(o.genome_max_len)) |>
-  @>(hash(o.initial_genome_min_len)) |> 
-  @>(hash(o.codon_length)) |>
-  @>(hash(o.redundant_per_codon)) |> 
-  @>(hash(o.mut_segment_mean_len)) |>
-  @>(hash(o.mut_segment_stdev)) |>
-  @>(hash(o.mut_codon_p)) |>
-  # @>(hash(o.mut_point_p)) |>
-  # @>(hash(o.mut_ins_p)) |>
-  # @>(hash(o.mut_del_p)) |> 
-  @>(hash(o.objective_fn)) |>
-  @>(hash(o.rng))
-end
+# TODO FIXME: hash
+# @inline function Base.hash(o::Options, h::UInt)
+#   # @info "Base.hash(Options)"
+#   hash(:Options, h) |>
+#   @>(hash(o.genome_max_len)) |>
+#   @>(hash(o.initial_genome_min_len)) |>
+#   @>(hash(o.codon_length)) |>
+#   @>(hash(o.redundant_per_codon)) |>
+#   @>(hash(o.mut_segment_mean_len)) |>
+#   @>(hash(o.mut_segment_stdev)) |>
+#   @>(hash(o.mut_codon_p)) |>
+#   # @>(hash(o.mut_point_p)) |>
+#   # @>(hash(o.mut_ins_p)) |>
+#   # @>(hash(o.mut_del_p)) |> 
+#   @>(hash(o.objective_fn)) |>
+#   @>(hash(o.rng))
+# end
 
-@inline function Base.:(==)(a::Options, b::Options)
-  isequal(a.genome_max_len, b.genome_max_len) &&
-    isequal(a.initial_genome_min_len, b.initial_genome_min_len) && isequal(a.codon_length, b.codon_length) &&
-    isequal(a.redundant_per_codon, b.redundant_per_codon) &&
-    isequal(a.mut_segment_mean_len, b.mut_segment_mean_len) &&
-    isequal(a.mut_segment_stdev, b.mut_segment_stdev) &&
-    isequal(a.mut_codon_p, b.mut_codon_p) &&
-    # isequal(a.mut_point_p, b.mut_point_p) &&
-    # isequal(a.mut_ins_p, b.mut_ins_p) &&
-    # isequal(a.mut_del_p, b.mut_del_p) && 
+@inline function Base.:(==)(a::Options{GO}, b::Options{GO}) where {GO<:GenomeOptions}
+  isequal(a.genome_opts, b.genome_opts) &&
+    isequal(a.mutation_opts, b.mutation_opts) &&
     isequal(a.objective_fn, b.objective_fn) &&
     isequal(a.rng, b.rng)
 end
 
 
-function _get_rng(o::Options)
-  if isnothing(o.rng)
-    Random.default_rng()
-  else
-    o.rng
-  end
-end
+@inline _get_rng(o::Options) = get_or_else(o.rng, Random.default_rng())
 
-@auto_hash_equals mutable struct State{N,GenomeType<:AbstractArray}
+@auto_hash_equals mutable struct State{N,GenomeType<:AbstractArray,O<:Options}
   genomes::SizedVector{N,GenomeType}
+  # _decoded_genomes::SizedVector{N, Decoded}
   fitnesses::SizedVector{N,Float64}
 
-  options::Options
+  options::O
 
   generation::Int
 
@@ -130,8 +107,8 @@ end
 
   _initialized::Bool
 
-  function State{N,GenomeType}(opts::Options) where {N,GenomeType<:AbstractArray}
-    s = new{N,GenomeType}()
+  function State{N,GenomeType}(opts::O) where {N,GenomeType<:AbstractArray,O<:Options}
+    s = new{N,GenomeType,O}()
     s.options = opts
     s.generation = 0
     s.best_solution_idx = -1
@@ -140,16 +117,18 @@ end
     s.fitnesses = SizedVector{N,Float64}(fill(Inf, N))
     s
   end
-
-  function State{N}(genomes::SizedVector{N,GenomeType}, fitnesses::SizedVector{N,Float64}, opts::Options, inited::Bool) where {N,GenomeType}
-    new{N,GenomeType}(genomes, fitnesses, opts, 0, -1, 0, inited)
-  end
-
 end
 
-@inline function State{N}(genomes::GS, fitnesses, opts::Options, inited=true) where {N,GT<:AbstractArray,GS<:SizedVector{N,GT}}
-  State{N,GT}(genomes, fitnesses, opts, -1, 0, 0, inited)
+
+
+function State{N}(genomes::SizedVector{N,GenomeType}, fitnesses::SizedVector{N,Float64}, opts::O, inited::Bool) where {N,GenomeType, O<:Options{GenomeType}}
+  State{N,GenomeType,O}(genomes, fitnesses, opts, 0, -1, 0, inited)
 end
+
+
+# @inline function State{N}(genomes::GS, fitnesses, opts::Options, inited=true) where {N,GT<:AbstractArray,GS<:SizedVector{N,GT}}
+#   State{N,GT}(genomes, fitnesses, opts, -1, 0, 0, inited)
+# end
 
 @inline function State{N}(genomes::GS, opts::Options) where {N,GT<:AbstractArray,GS<:SizedVector{N,GT}}
   State{N}(genomes, opts, false)
@@ -219,12 +198,15 @@ end
 
 @inline function generate_random_individual(o::Options, ::Type{Vector{Bool}})
   rng = _get_rng(o)
-  rand(rng, Bool, rand(rng, o.initial_genome_min_len:o.genome_max_len))
+  let (min_len, max_len) = genome_length_extrema(o.genome_opts)
+    rand(rng, Bool, rand(rng, min_len:max_len))
+  end
 end
 
 function _init!(s::State)
   @assert !s._initialized "GA.State already initialized"
   s._initialized = true
+
   s |>
   _generate_random_population! |>
   _evaluate_fitnesses! # TODO: sortin pitäis tapahtua tässä kohdin
@@ -237,25 +219,26 @@ function _evaluate_fitnesses!(opts::Options, genomes::_SizedTypes{N,GenomeType},
   # TODO: mieti tää evaluointikuvio
   obj_fn = opts.objective_fn
 
-  genome_decoder = @<(decode_genome(opts.codon_length, opts.redundant_per_codon))
+  # TODO FIXME: optionsit ja dekoodaus menny uusiks --> kato toimiiks tää
+  genome_decoder = @>(decode_genome(opts.genome_opts))
 
   Folds.foreach(individuals_lazy(genomes, fitnesses)) do indiv
     decoded = indiv.genome |> genome_decoder
     # @info decoded |> collect
-    # TODO: pitääköhän noi uudet fitnessit palauttaa jotenkin eikä setata suoriltaan? Eeeiii välttis? Tarviiko niitä?
+    # KYSYMYS: pitääköhän noi uudet fitnessit palauttaa jotenkin eikä setata suoriltaan? Eeeiii välttis? Tarviiko niitä?
     indiv.fitness = decoded |> obj_fn
   end
   fitnesses
 end
 
-function _sort_by_fitness!(s::State{N}) where {N}
+@inline function _sort_by_fitness!(s::State{N}) where {N}
   sorted_mask = sortperm(s.fitnesses)
   s.fitnesses = @inbounds s.fitnesses[sorted_mask]
   s.genomes = @inbounds s.genomes[sorted_mask]
   s
 end
 
-function _evaluate_fitnesses!(s::State{N}) where {N}
+@inline function _evaluate_fitnesses!(s::State{N}) where {N}
   _evaluate_fitnesses!(s.options, s.genomes, s.fitnesses)
   _sort_by_fitness!(s)
   #=   Folds.map(individuals_lazy(s)) do indiv
@@ -273,12 +256,13 @@ function _run_generation!(s::State{N}) where {N}
 
   # select parents
   # run crossover. HOX: tätä varten pitää tehdä genome -> codons
-  # run mutation. HOX: ja sit tänne taas heti codons -> genome
+  #   HUOM: crossover tehdään kodoneiksi splitatulle genomille, mutta EI DEKOODATULLE.
+  # run mutation. HOX: ja tää tehdään offspringien raaka-genomelle
   # evaluate offsprings. HOX: ja tätä varten sit genome -> underlying representation -mäppäys. Ks. genome.jl
   # laske n_better_than_parents
   # environmental selection: joko generational replacement tai elitist
   #   - gen rep: koko populaatio korvataan offspringeillä
-  #   - elitist: toinen vanhempi korvataan vaan jos offspring parempi
+  #   - elitist: (parent_a, parent_b, offspring) -setistä paras päätyy jatkoon
   # päivitä best_solution_idx 
 end
 
@@ -289,23 +273,26 @@ function optimize() end
   using Random
   const N = 400
   rng() = Xoshiro(666)
-  function obj_fn(genome) 
-    _sum = (genome |> Iterators.flatten |> sum)
+  function obj_fn(genome)
+    # HOX: varmistaa että genomi oikeesti on muotoa [(1,0,1,0), (1,1,1,1), ...]
+    _g::AbstractArray{AbstractArray} = genome |> collect
+
+    _sum = (_g |> Iterators.flatten |> sum)
     (42 - _sum)^2
   end
-  opts() = GA.Options(objective_fn=obj_fn, genome_max_len=32, initial_genome_min_len=8, rng=rng())
+  getopts() = GA.Options(objective_fn=obj_fn, genome_opts=GA.GenomeOptions(max_codons=5, min_codons=2), rng=rng())
 
-  s = GA.State{N,Vector{Bool}}(opts()) |> GA._init!
+  s = GA.State{N,Vector{Bool}}(getopts()) |> GA._init!
   @test issorted(GA.fitnesses(s))
 
   let (m, M) = extrema(GA.fitnesses(s))
-    @test m != M 
+    @test m != M
   end
 
   # samalla rng:llä initialisoidut 2 eri statea pitäis olla samat
-  @test GA.State{N,Vector{Bool}}(opts()) |> GA._init! == GA.State{N,Vector{Bool}}(opts()) |> GA._init!
+  @test GA.State{N,Vector{Bool}}(getopts()) |> GA._init! == GA.State{N,Vector{Bool}}(getopts()) |> GA._init!
 
-  @test GA.State{N,Vector{Bool}}(opts()) |> GA._init! != GA.State{50,Vector{Bool}}(opts()) |> GA._init!
+  @test GA.State{N,Vector{Bool}}(getopts()) |> GA._init! != GA.State{50,Vector{Bool}}(getopts()) |> GA._init!
   # using StaticArrays
 
   # genome1 = Bool[1, 1, 1, 1]
