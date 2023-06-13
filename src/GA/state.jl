@@ -124,7 +124,7 @@ end
 
 
 
-function State{N}(genomes::SizedVector{N,GenomeType}, fitnesses::SizedVector{N,Float64}, opts::O, inited::Bool) where {N,GenomeType, O<:Options{GenomeType}}
+function State{N}(genomes::SizedVector{N,GenomeType}, fitnesses::SizedVector{N,Float64}, opts::O, inited::Bool) where {N,GenomeType,O<:Options{GenomeType}}
   State{N,GenomeType,O}(genomes, fitnesses, opts, 0, -1, 0, inited)
 end
 
