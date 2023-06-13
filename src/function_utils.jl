@@ -218,8 +218,8 @@ end
 
 function _curried(ex, Constructor)
   @capture(ex, fn_(args__; kws__) | fn_(args__)) || error("Not used on a function call? Syntax: @> f(a, b; c = 1)")
-  if length(args) == 0
-    error("Function call had no arguments. Syntax: @> f(a, b; c = 1)")
+  if length(args) == 0 && length(kws) == 0
+    error("Function call had no regular or keyword arguments. Syntax: @> f(a, b; c = 1)")
   end
 
   # @debug fn args kws
@@ -247,5 +247,17 @@ macro x(ex)
   :($(esc(:x)) -> $(esc(ex)))
 end
 
+
+@testitem "Currying" begin
+  fn(a,b;c) = (a-b)c
+
+  # pelkkä kw arg
+  @test @<(fn(;c=5))(12,2) == 50
+  
+  # pelkkä kw pitäis toimia samalla tavalla sekä @> että @<
+  @test @>(fn(;c=5))(12,2) == 50
+
+  @test @>(fn(12))(2;c=5) == 50
+end
 
 export CurryHead, @©, @£, @>, @<, @x
