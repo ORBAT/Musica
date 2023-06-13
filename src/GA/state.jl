@@ -64,6 +64,10 @@ function Options(; genome_opts::GO=GenomeOptions(), restkw...) where {GO<:Genome
   Options{GO}(; genome_opts, restkw...)
 end
 
+@forward Options.genome_opts (genome_min_length, genome_max_length, clamp_genome_length!)
+
+# TODO: forward Options.genome_opts:ille läjä noita GenomeOptions:ia ottavia funkkareita tyyliin genome_max_len, active_codon_length jne jne
+
 # Options = _Options3
 
 # TODO FIXME: hash
