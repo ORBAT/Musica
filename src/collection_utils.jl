@@ -115,6 +115,9 @@ end
   Transducers.complete(Transducers.inner(rf), iresult)
 end
 
+Transducers.OutputSize(::Type{<:LiftToArray}) = Transducers.SizeChanging()
+Transducers.isexpansive(::LiftToArray) = false
+
 function take(a, n)
   if length(a) ≤ n
     @inbounds @view a[:]
