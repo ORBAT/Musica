@@ -11,6 +11,7 @@ A sized container type for 1-dimensional CA rows. `NStates` is the number of sta
 Is a subtype of `AbstractVector` and should implement the whole interface for it
 """
 struct Row{NStates,Len,T,C<:AbstractArray{T}} <: AbstractVector{T}
+  # TODO FIXME: C vois aina olla <:_SizedTypes{Len,T}
   coll::C
 
   # TODO FIXME: puljaa tää niin että T<:Union{Unsigned,Bool}
@@ -52,7 +53,7 @@ end
 @inline _condensed_str(coll::AbstractArray{Bool})::String = map(v -> v ? '1' : '0', coll) |> join
 @inline _condensed_str(coll::AbstractArray{<:Integer})::String = map(v -> '1' + (v - 1), coll) |> join
 
-function Base.show(io::IO, row::Row{NS,W,T}) where {NS,W,T<:Union{Bool, Unsigned}}
+function Base.show(io::IO, row::Row{NS,W,T}) where {NS,W,T<:Union{Bool,Unsigned}}
   print(io, "Row{", NS, ",", W, ",", T, "}(", _condensed_str(row.coll), ")")
 end
 
@@ -76,7 +77,7 @@ Create a new `Row` from any `AbstractArray` `c`. Checks that `c`'s length is equ
 """
 @inline function Row{NStates,Len}(c::C) where {NStates,Len,T,C<:AbstractArray{T}}
   # @debug "Row generic constr"
-  @assert length(c) == Len
+  @assert length(c) == Len "length(c) ($(length(c))) != Len ($Len)"
   Row{NStates,Len,T}(c)
 end
 
@@ -98,7 +99,6 @@ end
   # @debug "Base.similar(Row) r.coll=$(typeof(r.coll)) c=$(typeof(c))"
   Row{NStates,Len}(c)
 end
-
 
 """
     Base.convert(::Type{Row{N,L,T,CS}}, x::Row{N,L,T,CM}) where {N,L,T,CS<:SVector{L,T},CM<:MVector{L,T}}
