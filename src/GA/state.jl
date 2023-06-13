@@ -56,7 +56,8 @@ end =#
 
 
   objective_fn::Function
-  rng::Maybe{Random.AbstractRNG} = nothing
+  # FIXME: tyypitys! Ei jaksais taas uutta parametria
+  rng::Maybe{Xoshiro} = nothing
 end
 
 function Options(; genome_opts::GO=GenomeOptions(), restkw...) where {GO<:GenomeOptions}
