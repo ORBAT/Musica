@@ -190,27 +190,20 @@ end
 #     )
 # end
 
-@deprecate decode_genome_flat(genome, codon_length, redundant_per_codon) decode_genome(genome, codon_length, redundant_per_codon)
-#= @inline function decode_genome_flat(genome, codon_length::Integer=default_codon_length(), redundant_per_codon::Integer=default_redundant_per_codon())
-    @assert codon_length > redundant_per_codon "codon_length must be > redundant_per_codon"
-    # decode_genome(genome, codon_length, redundant_per_codon) |> Cat()
-    decode_genome(genome, codon_length, redundant_per_codon)
-end =#
-
 
 @inline function _droplast(arr::AbstractArray, n, max_len)
     # n = 1, max_len = 4
     # arr_len == max_len
     # arr = [1, 2, 3, 4]
-    # --> tiputetaan vaan `n` kpl pois lopusta
+    # --> tiputetaan vaan `n` kpl pois lopusta, return [1, 2]
     #
     # arr_len < max_len. diff = 1
     # arr = [1, 2, 3]
-    # --> jos diff < n, tiputetaan `diff` kpl pois
+    # --> jos diff < n, tiputetaan `diff` kpl pois, return [1, 2]
     #
     # diff ≥ n. diff = 2
     # arr = [1, 2]
-    # --> ei tehä mitään
+    # --> ei tehä mitään, return [1, 2]
 
 
     arr_len = length(arr)
@@ -253,24 +246,22 @@ end
 # # end
 
 @testitem "genome mappings" begin
-    opts = GA.GenomeOptions()
-    @test GA.decode_genome(opts, 1:15 |> collect) |> collect ==
-          [
-        [1, 2, 3, 4],
-        [7, 8, 9, 10],
-        [13, 14, 15, 0]]
+    let opts = GA.GenomeOptions()
+        @test GA.decode_genome(opts, 1:15 |> collect) |> collect == [
+            [1, 2, 3, 4],
+            [7, 8, 9, 10],
+            [13, 14, 15, 0]]
 
-    @test GA.decode_genome(opts, 1:16) |> collect ==
-          GA.decode_genome(opts, 1:17) |> collect ==
-          GA.decode_genome(opts, 1:18) |> collect
-
+        @test GA.decode_genome(opts, 1:16) |> collect ==
+              GA.decode_genome(opts, 1:17) |> collect ==
+              GA.decode_genome(opts, 1:18) |> collect
+    end
     let genome = 1.0:14.0 |> collect
-        # [[1, 2, 3], [5, 6, 7], [9, 10, 11], [13, 14]]
-        @test GA.decode_genome(GA.GenomeOptions{4,1}(), genome) |> collect == 
-        [[1.0, 2.0, 3.0],
-        [5.0, 6.0, 7.0],
-        [9.0, 10.0, 11.0],
-        [13.0, 14.0, 0.0]]
+        @test GA.decode_genome(GA.GenomeOptions{4,1}(), genome) |> collect == [
+            [1.0, 2.0, 3.0],
+            [5.0, 6.0, 7.0],
+            [9.0, 10.0, 11.0],
+            [13.0, 14.0, 0.0]]
     end
 
 end
