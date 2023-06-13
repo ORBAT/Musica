@@ -235,4 +235,17 @@ function _curried(ex, Constructor)
   end
 end
 
-export CurryHead, @©, @£, @>, @<
+"""
+    @x 2x # expands to x -> 2x
+
+```jldoctest
+julia> (@x 2x)(4)
+8
+```
+"""
+macro x(ex)
+  :($(esc(:x)) -> $(esc(ex)))
+end
+
+
+export CurryHead, @©, @£, @>, @<, @x
