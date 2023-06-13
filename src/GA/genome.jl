@@ -127,10 +127,10 @@ function GenomeOptions{CodonLen,NRedundant}(; restkw...) where {CodonLen,NRedund
 end
 
 """
-Defaulttina `ElemType` `Bool`, 
+NOTE: tää on sitä varten että esim. tyyppiargumentiton GenomeOptions() tai GenomeOptions(max_codons=55) toimii
 """
-function GenomeOptions(; restkw...)
-    GenomeOptions{Bool,default_genome_codon_length,default_genome_redundant_per_codon,2}(; restkw...)
+function GenomeOptions(maxc, minc)
+    GenomeOptions{Bool,default_genome_codon_length,default_genome_redundant_per_codon,2}(maxc,minc)
 end
 
 # function Base.show(io::IO, opts::GenomeOptions{NS,CL,NR}) where {NS,CL,NR}

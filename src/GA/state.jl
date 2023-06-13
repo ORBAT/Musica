@@ -49,20 +49,18 @@ end
   isequal(a.fitness, b.fitness) && isequal(a.genome, b.genome)
 end =#
 
-@with_kw struct Options{GO<:GenomeOptions}
+@with_kw struct Options{GO<:GenomeOptions,ObjFn<:Function}
 
   genome_opts::GO = GenomeOptions()
   mutation_opts::MutationOptions = MutationOptions()
 
 
-  objective_fn::Function
+  objective_fn::ObjFn
   # FIXME: tyypitys! Ei jaksais taas uutta parametria
   rng::Maybe{Xoshiro} = nothing
 end
 
-function Options(; genome_opts::GO=GenomeOptions(), restkw...) where {GO<:GenomeOptions}
-  Options{GO}(; genome_opts, restkw...)
-end
+Options(go, mo, obj_fn, rng) = Options{typeof(go),typeof(obj_fn)}(go, mo, obj_fn, rng)
 
 @forward Options.genome_opts (genome_min_length, genome_max_length, clamp_genome_length!)
 
