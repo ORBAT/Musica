@@ -72,18 +72,20 @@ end
 
 export get_or_else
 
-_Collectable = Union{Transducers.Foldable, AbstractRange}
+_Collectable = Union{Transducers.Foldable,AbstractRange}
 
 @inline maybe_collect(x) = x
 @inline maybe_collect(x::T) where {T<:_Collectable} = x |> collect
-@inline maybe_collect(x::T) where {N, T<:NTuple{N, Any}} = map(maybe_collect, x)
+@inline maybe_collect(x::T) where {N,T<:NTuple{N,Any}} = map(maybe_collect, x)
 
 export maybe_collect
 
 """
     LiftToArray()
 
-A transducer that lifts its input into an array.
+A transducer that lifts its input into an array. Input must be finite.
+
+
 
 ```jldoctest; setup=:(using Transducers)
 # using Transducers
