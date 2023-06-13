@@ -115,7 +115,7 @@ end
 
 function take(a, n)
   if length(a) ≤ n
-    a
+    @inbounds @view a[:]
   else
     @inbounds @view a[1:n]
   end
