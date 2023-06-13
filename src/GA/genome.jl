@@ -213,10 +213,10 @@ end
         if len_diff < n
             n = len_diff
         else
-            return arr
+            return @view arr[:]
         end
     end
-    @inbounds arr[1:end-n]
+    @inbounds @view arr[1:end-n]
 end
 
 @inline function _zero_pad_array(a::AbstractArray{T}, wanted_len) where {T}
