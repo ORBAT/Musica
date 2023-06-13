@@ -1,11 +1,8 @@
 using Transducers, TestItems
 
-const IntArray = AbstractArray{<:Integer}
 
-struct Chunked{N} end
-Chunked(n) = Chunked{n}
-
-
+const _EductionOr{T} = Union{Transducers.Eduction,T}
+const EductionOrArray = _EductionOr{AbstractArray}
 
 """
 Generally a `Parser` takes an `AbstractArray` input, parses it and returns leftover input and the result of the parse.
@@ -24,16 +21,46 @@ end
 function Parser(fn)
   Parser(fn, Nothing)
 end
-Transducers._bottom_state_type
-# HOX: se wanha malli taas
-function (p::Parser{Nothing})(inp)
+
+# HUOM: se wanha malli taas
+function (p::Parser{Nothing})(inp::EductionOrArray)
   inp |> Cat() |> p.fn
 end
 
-const _EductionOr{T} = Union{Transducers.Eduction,T}
 
-function (p::Parser)(inp)::Tuple{_EductionOr{AbstractArray},_EductionOr{AbstractArray}}
-  inp |> p.fn
+function ((p::Parser{T})(inp::EductionOrArray)::Tuple{EductionOrArray,T,Bool}) where T
+  # HOX: jotkut parserifunkkarit ei palauta ok:ta, koska ne ei koskaan failaa
+  (input_left, output, maybe_ok...) = inp |> p.fn
+  input_left, output, get_or_else(maybe_ok, true)
+end
+
+
+## TODO: ei ehkä tarvetta?
+#= function ((p::Parser{T})((input_left::EductionOrArray, output::EductionOrArray, ok::Bool))::Tuple{EductionOrArray,EductionOrArray,Bool}) where T
+  error("WIP")
+#=  (input_left, output, maybe_ok...) = inp |> p.fn
+ input_left, output, get_or_else(maybe_ok, true) =#
+end =#
+
+function (curr::Parser{T})(previous_parser::Parser{K}) where {T,K}
+  Parser{Tuple{K,Maybe{T}}}() do inp
+    inp_left, prev_outp::K, ok = inp |> previous_parser
+    if !ok
+      return inp, (prev_outp, nothing), ok
+    end
+
+    input_rest, curr_outp::T, ok = curr(inp_left)
+    input_rest, (prev_outp, Some(curr_outp)), ok
+  end
+
+  error("WIP")
+end
+
+struct VarintParser end
+
+
+function parse_varint()
+  error("WIP")
 end
 
 # TODO: jotain näitä allaolevia mä varmaan tarviin, mut ehkä turha tehdä vielä ennen ku tiiän tarkalleen mitä haluun :P
@@ -110,29 +137,19 @@ end
 
 xf_printer(label) =
   Map() do x
-    println(label, ":", x," – ",typeof(x))
+    println(label, ":", x, " – ", typeof(x))
     return x  # just return it as-is
   end
 
 
-@inline function parser2(pui::Type{ParseUInt{NCodons}}) where {NCodons}
+@inline function genome_parser(pui::Type{ParseUInt{NCodons}}) where {NCodons}
   Parser(pui) do inp
     (
-      inp |>  Drop(NCodons) |> xf_printer("parser2 left"),
-      inp |> Musica.LiftToArray() |>
-      Map(@<(Musica._take(NCodons))) |>
-      Map(x -> x |> Cat() |> collect) |>
-      Map(undigits)
+      inp |> Drop(NCodons), inp |> Musica.LiftToArray() |>
+                            Map(@<(Musica.take(NCodons))) |>
+                            Map(x -> x |> Cat() |> collect) |>
+                            Map(undigits)
     )
-  end
-end
-
-function _take(a, n)
-  a_len = length(a)
-  if a_len ≤ n
-    a
-  else
-    @inbounds @view a[1:n]
   end
 end
 
@@ -144,7 +161,7 @@ end
 
 Return a [`Parser`](@ref) for `type`.
 """
-function parser(::Type{T}) where {T}
+function parser(::Type{T}) where T
   error("No parser registered for ", T)
 end
 
