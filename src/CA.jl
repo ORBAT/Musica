@@ -218,10 +218,10 @@ end
 """
 @inline function _transducer(dca::T) where {T<:DiscreteCA}
   Consecutive(_neighborhood_size(T), 1) |>
-  Map(@© _lookup_rule(dca))
+  Map(@> _lookup_rule(dca))
 end
 
-# HUOM: käyttäytyy ihan vitun huonosti jos x ei oo indeksi rule_lookup:issa, koska @inbounds
+# HOX: käyttäytyy ihan vitun huonosti jos x ei oo indeksi rule_lookup:issa, koska @inbounds
 @inline function _lookup_rule(dca::DiscreteCA{NS}, x) where {NS}
   @inbounds dca.rule_lookup[undigits(x, NS)+1]
 end
