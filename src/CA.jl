@@ -185,9 +185,9 @@ HOX TODO: pitää ehkä tehdä tästä myös mutatoiva versio. CANeuron ja CANeu
   _collect_into!(xf, ws, _ss)
 end
 
-"Feeds `foldable` into `xf` and collects the result into `collection`. Mutates `collection`"
-_collect_into!(xf, foldable, collection) =
-  foldl(xf |> Enumerate(), foldable; init=collection) do acc, (idx, a)
+"Feeds `foldable` into `xf` and collects the result into `dest`. Mutates `collection`"
+_collect_into!(xf, foldable, dest) =
+  foldl(xf |> Enumerate(), foldable; init=dest) do acc, (idx, a)
     # folds xf into collection
     @inbounds acc[idx] = a
     acc
