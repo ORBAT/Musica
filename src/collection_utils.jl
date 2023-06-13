@@ -1,32 +1,71 @@
 using Transducers, TestItems
 using Transducers: start, inner, @next, wrap, unwrap, complete, Eduction
 
-const Maybe{T} = Union{Union{T,Some{T}},Nothing}
+const Maybe{T} = Union{Some{T},Nothing}
 
-export Maybe
+@inline Base.convert(::Type{Some{T}}, x::T) where T = Some(x)
+@inline Base.convert(::Type{T}, x::Some{T}) where T = get_value(x)
+@inline Base.:(==)(a::Some{T}, b::Some{T}) where T = isequal(get_value(a), get_value(b))
 
-@inline get_or_else(::Tuple{}, fallback::T) where T = fallback
-@inline get_or_else(::Nothing, fallback::T) where T = fallback
-@inline get_or_else(v::T, _fallback) where T = @inline get_value(v)
-
-"""
-
-"""
-function get_value end
-
-get_value() = throw(ArgumentError("No value arguments present"))
-get_value(x::Nothing, y...) = get_value(y...)
-get_value(x::Some, y...) = x.value
-get_value((x,)::NTuple{1}, y...) = x
-get_value(x::Any, y...) = x
-
-@testitem "Maybe" begin
-  Base.map
-  using Random
-  struct Testes
-    v::Maybe{AbstractRNG}
+@testitem "Some{T} conversions and equality" begin
+  let a::Some{Int} = 10
+    @test a isa Some{Int}
+    @test a == Some(10)
   end
 
+  let a::Int = Some(10)
+    @test a isa Int
+    @test a == 10
+  end
+
+  let a = Some(1), b = Some(1)
+    @test a == b
+  end
+end
+
+export Maybe, Something
+
+@inline get_or_else(::Tuple{}, fallback::T) where {T} = fallback
+@inline get_or_else(::Nothing, fallback::T) where {T} = fallback
+@inline get_or_else(v::T, _fallback) where {T} = @inline get_value(v)
+
+@inline issomething(x) = !isnothing(x) && x != ()
+
+function get_value end
+
+@inline get_value() = throw(ArgumentError("No value arguments present"))
+@inline get_value(x::Nothing, y...) = get_value(y...)
+@inline get_value(x::Tuple{}, y...) = get_value(y...)
+@inline get_value(x::Some, y...) = x.value
+@inline get_value((x,)::NTuple{1}, y...) = x
+@inline get_value(x::Any, y...) = x
+
+# map(f, x::Number, ys::Number...) = f(x, ys...)
+# TODO: map(f, x::Maybe{T}, ys::Maybe{T}...) niin että kaikki x, ys... pitää olla Some
+
+"""
+```jldoctest
+julia> map(x->2x, Some(1))
+Some(2)
+```
+"""
+@inline Base.map(f, x::Some) = Some(f(get_value(x)))
+
+"""
+```jldoctest
+julia> map(x->2x, nothing)
+
+```
+"""
+@inline Base.map(f, ::Nothing) = nothing
+
+@testitem "Maybe" begin
+  using Random
+  struct Testes
+    v::Maybe{Xoshiro}
+  end
+
+  @test Musica.get_or_else(Testes(Some(Xoshiro(666))).v, Xoshiro(1)) == Xoshiro(666)
   @test Musica.get_or_else(Testes(Xoshiro(666)).v, Xoshiro(1)) == Xoshiro(666)
   @test Musica.get_or_else(Testes(nothing).v, Xoshiro(1)) == Xoshiro(1)
 end
