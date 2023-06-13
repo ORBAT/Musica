@@ -280,6 +280,8 @@ See also [`undigits`](@ref)
 """
 @inline function rule_to_rule_lookup(rule::Integer, nstates::Int=2, radius::Int=1)
   RuleLen = nstates^(2 * radius + 1)
+  # FIXME: tän tyypin pitäis sopia yhteen NStates:in kanssa.
+  # et jos NS=2 niin vois olla SVector{RuleLen,Bool}
   SVector{RuleLen,Int}(digits(Int, rule; base=nstates, pad=RuleLen))
 end
 
