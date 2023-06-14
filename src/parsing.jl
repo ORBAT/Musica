@@ -1,20 +1,35 @@
 using Transducers, TestItems
 
+#=
+############## HUOM HUOM parsereiden mietintää
+
+Olis kyl hyvä jos pystyis jotenkin Transducereita hyödyntämään. Parserihan on tavallaan reducing function: (state::S, input::T)::S
+
+Mut miten parseemisen saa hoidettua laiskasti? Joku Lazy.jl / LazyArrays.jl / tmv on tietty vaihtoehto, mutta voiskohan Transducers auttaa?
+--> ei välttis. Tai et sitä voi käyttää parsereiden "sisällä", mut voi olla et se varsinainen thunkkaus pitää tehä jollain muulla, ku parsereilla
+    on aika eri tarpeet ku mitä transducereilla. Plus Transducers.jl on sen verran hankalaa koodia että sen syvällisempään tajuamiseen menis varmaan
+    yhtä kauan ku homman ite miettimisessä :P
+
+HOX loput mietinnästä scratchin lopussa
+
+=#
 
 const _EductionOr{T} = Union{Transducers.Eduction,T}
-const EductionOrArray = _EductionOr{AbstractArray}
+const EductionOrArray{T} = _EductionOr{AbstractArray{T}}
 
 """
 Generally a `Parser` takes an `AbstractArray` input, parses it and returns leftover input and the result of the parse.
 
 See [`parser`](@ref) methods
 """
-struct Parser{Out} <: Function
-  fn::Function
+struct Parser{Out, Fn<:Function} <: Function
+  fn::Fn
 end
 
+Parser{Out}(fn) where {Out} = Parser{Out, typeof(fn)}(fn)
+
 function Parser(fn, ::Type{Out}) where {Out}
-  Parser{Out}(fn)
+  Parser{Out, typeof(fn)}(fn)
 end
 
 # HOX FIXME tää on se vanha malli missä parserin inputti oli aina vaan bittejä
@@ -24,11 +39,11 @@ end
 
 # HUOM: se wanha malli taas
 function (p::Parser{Nothing})(inp::EductionOrArray)
-  inp |> Cat() |> p.fn
+  inp |> p.fn
 end
 
 
-function ((p::Parser{T})(inp::EductionOrArray)::Tuple{EductionOrArray,T,Bool}) where T
+function ((p::Parser{T})(inp::EductionOrArray)::Tuple{EductionOrArray,EductionOrArray{T},Bool}) where T
   # HOX: jotkut parserifunkkarit ei palauta ok:ta, koska ne ei koskaan failaa
   (input_left, output, maybe_ok...) = inp |> p.fn
   input_left, output, get_or_else(maybe_ok, true)
@@ -42,19 +57,20 @@ end
  input_left, output, get_or_else(maybe_ok, true) =#
 end =#
 
-function (curr::Parser{T})(previous_parser::Parser{K}) where {T,K}
-  Parser{Tuple{K,Maybe{T}}}() do inp
-    inp_left, prev_outp::K, ok = inp |> previous_parser
-    if !ok
-      return inp, (prev_outp, nothing), ok
-    end
+# function (curr::Parser{T})(previous_parser::Parser{K}) where {T,K}
+#     NewT = Base.promote_typejoin(T,K)
+#     Parser(NewT) do inp
+#     inp_left, prev_outp, ok = inp |> previous_parser
+#     if !ok
+#       return inp, (prev_outp, nothing), ok
+#     end
 
-    input_rest, curr_outp::T, ok = curr(inp_left)
-    input_rest, (prev_outp, Some(curr_outp)), ok
-  end
+#     input_rest, curr_outp::T, ok = curr(inp_left)
+#     input_rest, (prev_outp, Some(curr_outp)),rm  ok
+#   end
 
-  error("WIP")
-end
+#   error("WIP")
+# end
 
 struct VarintParser end
 
@@ -142,13 +158,16 @@ xf_printer(label) =
   end
 
 
-@inline function genome_parser(pui::Type{ParseUInt{NCodons}}) where {NCodons}
-  Parser(pui) do inp
+@inline function genome_parser(::Type{ParseUInt{NCodons}}) where {NCodons}
+  Parser(UInt) do inp
     (
-      inp |> Drop(NCodons), inp |> Musica.LiftToArray() |>
-                            Map(@<(Musica.take(NCodons))) |>
-                            Map(x -> x |> Cat() |> collect) |>
-                            Map(undigits)
+      inp |> Drop(NCodons), 
+      
+      inp |> 
+      Take(NCodons) |>
+      Cat() |>
+      Musica.LiftToArray() |>
+      Map(undigits)
     )
   end
 end
