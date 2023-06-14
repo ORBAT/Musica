@@ -258,7 +258,25 @@ julia> undigits([])
 0x0000000000000000
 ```
 """
-undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=UInt(0))
+function undigits(d, base=2)
+  if length(d) == 0
+    return UInt(0)
+  end
+  
+  (s, b) = promote(zero(Base.eltype(d)), base)
+  mult = one(s)
+  for val in d
+      s += val * mult
+      mult *= b
+  end
+  return UInt(s)
+end
+
+@testitem "undigits" begin
+  @test undigits([0, 1, 1, 1, 1, 0, 0, 0]) == 0x000000000000001e
+end
+
+# undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=UInt(0))
 
 export undigits
 
