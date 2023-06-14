@@ -249,6 +249,22 @@ end
 
 
 @testitem "Currying" begin
+  # TODO FIXME: curry + UnionAll-tyypin tyyppiparametriton konstruktori
+#= 
+  struct ZeroPadded{PadLen,E,T<:AbstractVector{E}} <: AbstractVector{E}
+    coll::T
+    _coll_len::Int
+    function ZeroPadded{PL,E,T}(coll) where {PL,E,T}
+      @info coll
+      @assert length(coll) ≤ PL "length(coll) $(length(coll)) wasn't ≤ PL ($PL)"
+      new{PL,E,T}(coll, length(coll))
+    end
+  end
+  
+  ZeroPadded(a, n) = ZeroPadded{n,Base.eltype(a),typeof(a)}(a)
+
+  @test @<(ZeroPadded(4))([1,2]).coll == ZeroPadded([1,2], 4).coll =#
+
   fn(a,b;c) = (a-b)c
 
   # pelkkä kw arg
