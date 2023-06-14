@@ -125,7 +125,7 @@ end
 end
 
 @forward Row.coll (Base.size, Base.getindex, Base.setindex!, Base.firstindex, Base.lastindex, Base.iterate,
-  Base.length, Base.axes, eltype, Base.IteratorSize, Base.IteratorEltype)
+  Base.length, Base.axes, Base.eltype, Base.IteratorSize, Base.IteratorEltype)
 
 struct DiscreteCA{NStates,Radius,RuleLen} <: Function
   rule::UInt
