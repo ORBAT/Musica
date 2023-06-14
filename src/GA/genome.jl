@@ -219,7 +219,7 @@ end
     @inbounds @view arr[1:end-n]
 end
 
-@inline function _zero_pad_array(a::AbstractArray, wanted_len)
+@inline function _zero_pad_array(a::AbstractArray{T}, wanted_len) where T
     a_len = length(a)
     if a_len == wanted_len
         return a
