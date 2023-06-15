@@ -4,7 +4,8 @@ abstract type Neuron{NStates,InWidth,OutWidth} <: Function end
 
 struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
   ca::DiscreteCA
-  repeated_ca_fn::Function
+  repeated_ca_fn::Function # FIXME TODO: tästä oma tyyppiparametri? @code_warntype ainakin herjaa 
+  # ::Function -fieldeistä. Taitaa olla koska se on abstrakti tyyppi
   steps::Int
 
   function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, steps::Integer) where {NStates,Width}
