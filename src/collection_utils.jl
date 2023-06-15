@@ -1,11 +1,14 @@
 using Transducers, TestItems
 using Transducers: start, inner, @next, wrap, unwrap, complete, Eduction
+using AutoHashEqualsCached
 
-const Maybe{T} = Union{Some{T},Nothing}
+const Maybe{T} = Union{Some{T},Nothing, T}
 
-@inline Base.convert(::Type{Some{T}}, x::T) where T = Some(x)
-@inline Base.convert(::Type{T}, x::Some{T}) where T = get_value(x)
-@inline Base.:(==)(a::Some{T}, b::Some{T}) where T = isequal(get_value(a), get_value(b))
+# HOX: Base.convert(::Type{Maybe{T}} […]) määritteleminen saa parhaillaan jopa kääntäjän nurin
+
+@inline Base.convert(::Type{Some{T}}, x::T) where {T} = Some(x)
+@inline Base.convert(::Type{T}, x::Some{T}) where {T} = get_value(x)
+@inline Base.:(==)(a::Some{T}, b::Some{T}) where {T} = isequal(get_value(a), get_value(b))
 
 @testitem "Some{T} conversions and equality" begin
   let a::Some{Int} = 10
@@ -18,6 +21,18 @@ const Maybe{T} = Union{Some{T},Nothing}
     @test a == 10
   end
 
+  struct Bob
+    a::Int
+    b::String
+    c::Vector{Bool}
+  end
+
+  Bob() = Bob(rand(Int), rand(100:200) |> @<(string(; base=16)), rand(Bool, 5))
+
+  let bob1 = Bob(), bob2 = deepcopy(bob1)
+    @test bob1 == bob2
+    @test Some(bob1) == Some(bob2)
+  end
   let a = Some(1), b = Some(1)
     @test a == b
   end
@@ -27,18 +42,20 @@ export Maybe, Something
 
 @inline get_or_else(::Tuple{}, fallback::T) where {T} = fallback
 @inline get_or_else(::Nothing, fallback::T) where {T} = fallback
-@inline get_or_else(v::T, _fallback) where {T} = @inline get_value(v)
+# HUOM: @nospecialize(_fallback) koska sitä arvoa ei koskaan käytetä, niin turha kääntää sen eri 
+# tyypeille versioita
+@inline get_or_else(v::T, @nospecialize(_fallback)) where {T} = @inline get_value(v)
 
-@inline issomething(x) = !isnothing(x) && x != ()
+@inline issomething(x::T) where {T} = !isnothing(x) && x != ()
 
 function get_value end
 
 @inline get_value() = throw(ArgumentError("No value arguments present"))
 @inline get_value(x::Nothing, y...) = get_value(y...)
 @inline get_value(x::Tuple{}, y...) = get_value(y...)
-@inline get_value(x::Some, y...) = x.value
-@inline get_value((x,)::NTuple{1}, y...) = x
-@inline get_value(x::Any, y...) = x
+@inline get_value(x::Some, @nospecialize(y...)) = x.value
+@inline get_value((x,)::NTuple{1}, @nospecialize(y...)) = x
+@inline get_value(x::Any, @nospecialize(y...)) = x
 
 # map(f, x::Number, ys::Number...) = f(x, ys...)
 # TODO: map(f, x::Maybe{T}, ys::Maybe{T}...) niin että kaikki x, ys... pitää olla Some
