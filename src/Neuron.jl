@@ -16,7 +16,7 @@ struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
 end
 
 @inline function Base.hash(a::CANeuron{N,W}, h::UInt) where {N,W}
-  hash(:CANeuron, h) |> @©(hash(N)) |> @©(hash(W)) |> @©(hash(a.ca)) |> @©(hash(a.steps))
+  hash(:CANeuron, h) |> @>(hash(N)) |> @>(hash(W)) |> @>(hash(a.ca)) |> @>(hash(a.steps))
 end
 
 @inline function Base.:(==)(a::CANeuron{N1,W1}, b::CANeuron{N2,W2}) where {N1,W1,N2,W2}
