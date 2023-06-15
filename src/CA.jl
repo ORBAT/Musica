@@ -239,12 +239,16 @@ end
   @inferred(ca_b3(state_b3))
 end
 
+@inline bits_needed(number_length, base) = ceil(Int, number_length * log2(base))
+
 """
     undigits(d, base=2)
 
 Treat d as a little-endian vector of digits in `base` and return the base-10 representation.
 
 - TODO: tuki arvoille jotka on `> typemax(UInt64)`, koska muuten Row:n maksimipituus on 64
+- FIXME: 0xffffffffffffffff:stä ei oo mahdollista tuottaa esim. base 3:lla. 0xffffffffffffffff olis 41 numeroa pitkä, mutta
+  bits_needed pätkäsee tietty ennakoiden jo pelin poikki (koska jossain kohdin sitä 41 numeroista base 3 -numeroa tulis overflow)
 
 
 ```jldoctest
@@ -259,24 +263,81 @@ julia> undigits([])
 ```
 """
 function undigits(d, base=2)
-  if length(d) == 0
-    return UInt(0)
+  let d_len = length(d)
+    if d_len == 0
+      return UInt(0)
+    end
+
+    @assert bits_needed(d_len, base) ≤ 64 "undigits only returns UInt64 for now"
   end
-  
-  (s, b) = promote(zero(Base.eltype(d)), base)
+
+  (s, b) = (UInt(0), UInt(base)) #promote(zero(Base.eltype(d)), base)
   mult = one(s)
   for val in d
-      s += val * mult
-      mult *= b
+    s += val * mult
+    mult *= b
   end
-  return UInt(s)
+  return s
 end
 
 @testitem "undigits" begin
   @test undigits([0, 1, 1, 1, 1, 0, 0, 0]) == 0x000000000000001e
+  @test_throws AssertionError undigits(ones(Bool, 65))
+  @test_throws AssertionError undigits(ones(Int, 41), 3)
 end
 
 # undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=UInt(0))
+
+#=
+When you have an array `x` of digits in base `b`, one way to check if the number represented by `x` overflows 64 bits without actually computing the number is to compare `x` to the digits of the maximum 64-bit integer in base `b`.
+
+Here's a Julia function that generates the digits of a number in a given base:
+
+```julia
+function digits_in_base(n::Int, b::Int)
+    digits = []
+    while n > 0
+        push!(digits, n % b)
+        n = div(n, b)
+    end
+    return reverse(digits)
+end
+```
+
+You can use this function to get the digits of the maximum 64-bit integer in base `b`:
+
+```julia
+max_64bit_digits = digits_in_base(typemax(Int64), b)
+```
+
+Then, you can compare `x` to `max_64bit_digits`. If `x` is longer, it's definitely larger. If `x` and `max_64bit_digits` have the same length, you can compare them digit by digit from the most significant digit:
+
+```julia
+function fits_in_64_bits(x::AbstractArray{Int}, b::Int)
+    max_64bit_digits = digits_in_base(typemax(Int64), b)
+    if length(x) > length(max_64bit_digits)
+        return false
+    elseif length(x) < length(max_64bit_digits)
+        return true
+    else
+        for i in 1:length(x)
+            if x[i] > max_64bit_digits[i]
+                return false
+            elseif x[i] < max_64bit_digits[i]
+                return true
+            end
+        end
+    end
+    return true
+end
+```
+
+This function will return `true` if `x` fits in 64 bits and `false` otherwise.
+
+Please note that this code assumes that the digits in `x` are in descending order of significance (i.e., the first element of `x` is the most significant digit), and that the digits are valid in base `b` (i.e., each digit is less than `b`). If the digits in `x` are in ascending order of significance, you'll need to reverse `x` before calling this function.
+
+=#
+
 
 export undigits
 
