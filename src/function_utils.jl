@@ -6,19 +6,21 @@ using Transducers, TestItems, Test, MacroTools
 Compose `fn` with itself `times` times
 """
 @inline function repeated(fn, times)::Function
-  if times == 1
-    return fn
-  end
+  # if times == 1
+  #   return fn
+  # end
   # repeated_fold(fn, times)
   # HUOM: exec time on reilusti nopeampi repeated_compose:n lopputuloksella, mutta
   # sen composen kasaaminen (eli repeated_compose(fn,n) kutsu) kestää kauemmin ku mitä
   # repeated_fold
 
-  if times ≤ 10
-    repeated_compose(fn, times)
-  else
-    repeated_iter(fn, times)
-  end
+  repeated_iter(fn, times)
+
+  # if times ≤ 10
+  #   repeated_compose(fn, times)
+  # else
+  #   repeated_iter(fn, times)
+  # end
 end
 
 @testitem "repeated" begin
