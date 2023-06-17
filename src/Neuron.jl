@@ -10,7 +10,7 @@ struct CANeuron{NStates,Width,Fn} <: Neuron{NStates,Width,Width}
   function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, steps::Integer) where {NStates,Width}
     @assert steps > 0 "Number of steps must be >0"
     _g = Int(steps)
-    fn=repeated(ca, _g)
+    fn = repeated(ca, _g)
     new{NStates,Width,typeof(fn)}(ca, fn, _g)
   end
 end
@@ -78,7 +78,7 @@ end
   @test p(extra_bits) == ((ca_bits), CANeuron{2,8}(DiscreteCA{2}(110), n_steps))
 end
 
-const CANeuronStack{Size,NStates,StateWidth} = SVector{Size,CANeuron{NStates,StateWidth}} where {Size,NStates,StateWidth}
+const CANeuronStack{Size,NStates,StateWidth} = SVector{Size,CANeuron{NStates,StateWidth,Fn} where {Fn}}
 
 function Base.show(io::IO, cas::CANeuronStack{Size,NStates,Width}) where {Size,NStates,Width}
   print(io, "CANeuronStack(Size=$Size,NStates=$NStates,Width=$Width)")
@@ -128,6 +128,8 @@ end
   cas = CANeuronStack{2,2,32}(test_can1, test_can2)
   state = new_state(Val{32})
   @test cas(state) == test_can1(state) |> test_can2
+  @test cas == CANeuronStack{2,2,32}(test_can1, test_can2)
+  @test CANeuronStack{2,2,32}(test_can1, test_can2) == CANeuronStack{2,2,32}(test_can1, test_can2)
 end
 
 
@@ -189,7 +191,7 @@ end
   test_can2 = CANeuron{2,32}(DiscreteCA{2}(30), n_steps2)
 
   p = Musica.parser(CANeuronStack{2,2,32}; bits_for_steps=_bitsfor_steps)
-  @test p(vcat(full_bits1, full_bits2)) == (Bool[], CANeuronStack{2}(test_can1, test_can2))
+  @test p(vcat(full_bits1, full_bits2)) == (Bool[], CANeuronStack{2,2,32}(test_can1, test_can2))
 end
 
 @testitem "CANeuronStack dynamic size parsing" begin
@@ -217,7 +219,7 @@ end
 
   @test Musica.parser_bits_required(CANeuronStack; bits_per_stack_size=2, bits_for_steps=2) == 4 * Musica.parser_bits_required(CANeuron{2}, bits_for_steps=2) + _bits_per_stack_size
 
-  @test p(full_bits) == (Bool[], CANeuronStack{2}(test_can1, test_can2))
+  @test p(full_bits) == (Bool[], CANeuronStack{2,2,32}(test_can1, test_can2))
 end
 
 export CANeuron, CANeuronStack
