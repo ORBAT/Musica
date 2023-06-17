@@ -108,13 +108,13 @@ Convert a `Row` backed by a `MVector` to one backed by an `SVector`.
   Row{N,L,T,CS}(SVector{L}(x))
 end
 
-#QUE: tarviiks?
-#= @inline function Base.similar(r::Row{NStates,Len,T,C}, dims::Int...) where {NStates,Len,T,C}
-  @assert foldl(*, dims) == Len "dims gives a length of $(foldl(*,dims)) but Len was $Len"
-  c = similar(r.coll, dims...)
-  Row{NStates,Len}(c)
-end
- =#
+##HOX: tän avulla esim. _zero_pad_array toimis Row:n kanssa, mutta ei oo type stable koska toi vitun dim ei oo staattinen value adskjdsakjhdaskjh
+## _ja_ C<:SizedVector muuttuu Vector:iksi
+# @inline function Base.similar(r::Row{NStates,Len,T,C}, dim::Int) where {NStates,Len,T,C}
+#   # @assert foldl(*, dims) == Len "dims gives a length of $(foldl(*,dims)) but Len was $Len"
+#   c = similar(r.coll, dim)
+#   Row{NStates,dim,T,typeof(c)}(c)
+# end
 
 @testitem "Row" begin
   using StaticArrays
