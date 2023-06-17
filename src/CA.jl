@@ -241,6 +241,8 @@ end
 
 @inline bits_needed(number_length, base) = ceil(Int, number_length * log2(base))
 
+
+
 """
     undigits(d, base=2)
 
@@ -248,7 +250,8 @@ Treat d as a little-endian vector of digits in `base` and return the base-10 rep
 
 - TODO: tuki arvoille jotka on `> typemax(UInt64)`, koska muuten Row:n maksimipituus on 64
 - FIXME: 0xffffffffffffffff:stä ei oo mahdollista tuottaa esim. base 3:lla. 0xffffffffffffffff olis 41 numeroa pitkä, mutta
-  bits_needed pätkäsee tietty ennakoiden jo pelin poikki (koska jossain kohdin sitä 41 numeroista base 3 -numeroa tulis overflow)
+  bits_needed pätkäsee tietty ennakoiden jo pelin poikki (koska jossain kohdin sitä 41 numeroista base 3 -numeroa tulis overflow).
+  Yks tapa korjata ^ on verrata `d`:tä digits(typemax(UInt64);base=base):een
 
 
 ```jldoctest
@@ -262,7 +265,7 @@ julia> undigits([])
 0x0000000000000000
 ```
 """
-function undigits(d, base=2)
+Base.@assume_effects :foldable function undigits(d::Union{AbstractArray,Tuple}, base=2)
   let d_len = length(d)
     if d_len == 0
       return UInt(0)
@@ -272,12 +275,12 @@ function undigits(d, base=2)
   end
 
   (s, b) = (UInt(0), UInt(base)) #promote(zero(Base.eltype(d)), base)
-  mult = one(s)
+  mult = UInt(1)
   for val in d
     s += val * mult
     mult *= b
   end
-  return s
+  s
 end
 
 @testitem "undigits" begin
@@ -357,7 +360,7 @@ julia> show(x)
 
 See also [`undigits`](@ref)
 """
-@inline function rule_to_rule_lookup(rule::Integer, nstates::Int=2, radius::Int=1)
+@inline Base.@assume_effects :foldable function rule_to_rule_lookup(rule::Integer, nstates::Int=2, radius::Int=1)
   RuleLen = nstates^(2 * radius + 1)
   # FIXME: tän tyypin pitäis sopia yhteen NStates:in kanssa.
   # et jos NS=2 niin vois olla SVector{RuleLen,Bool}
@@ -414,7 +417,7 @@ export num_to_row
   @test_throws AssertionError num_to_ones(256, Val{8})
 end
 
-@inline num_from_gray(n) = UInt(Integer(reinterpret(Gray64, n)))
+@inline Base.@assume_effects :foldable num_from_gray(n) = UInt(Integer(reinterpret(Gray64, n)))
 
 export num_from_gray
 
@@ -430,7 +433,7 @@ Interpret a `Row` as being a Gray-coded integer
 
 export row_from_gray
 
-@inline num_to_gray(x) = (x ⊻ (x >> 1))
+@inline Base.@assume_effects :foldable num_to_gray(x) = (x ⊻ (x >> 1))
 
 export num_to_gray
 
