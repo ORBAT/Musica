@@ -74,8 +74,8 @@ end
   p = Musica.parser(CANeuron{2,8}; bits_for_steps=_bitsfor_steps)
 
   @test p(full_bits) == (Bool[], CANeuron{2,8}(DiscreteCA{2}(110), n_steps))
-  @test p(BitVector(steps_bits)) == (Bool[], CANeuron{2,8}(DiscreteCA{2}(0), n_steps))
-  @test p(extra_bits) == (BitVector(ca_bits), CANeuron{2,8}(DiscreteCA{2}(110), n_steps))
+  @test p(steps_bits) == (Bool[], CANeuron{2,8}(DiscreteCA{2}(0), n_steps))
+  @test p(extra_bits) == ((ca_bits), CANeuron{2,8}(DiscreteCA{2}(110), n_steps))
 end
 
 const CANeuronStack{Size,NStates,StateWidth} = SVector{Size,CANeuron{NStates,StateWidth}} where {Size,NStates,StateWidth}
