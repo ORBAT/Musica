@@ -2,16 +2,16 @@ using TestItems, Test
 
 abstract type Neuron{NStates,InWidth,OutWidth} <: Function end
 
-struct CANeuron{NStates,Width} <: Neuron{NStates,Width,Width}
+struct CANeuron{NStates,Width,Fn} <: Neuron{NStates,Width,Width}
   ca::DiscreteCA
-  repeated_ca_fn::Function # FIXME TODO: tästä oma tyyppiparametri? @code_warntype ainakin herjaa 
-  # ::Function -fieldeistä. Taitaa olla koska se on abstrakti tyyppi
+  repeated_ca_fn::Fn
   steps::Int
 
   function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, steps::Integer) where {NStates,Width}
     @assert steps > 0 "Number of steps must be >0"
     _g = Int(steps)
-    new(ca, repeated(ca, _g), _g)
+    fn=repeated(ca, _g)
+    new{NStates,Width,typeof(fn)}(ca, fn, _g)
   end
 end
 
