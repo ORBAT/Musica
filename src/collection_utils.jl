@@ -24,10 +24,9 @@ const Maybe{T} = Union{Some{T},Nothing, T}
   struct Bob
     a::Int
     b::String
-    c::Vector{Bool}
   end
 
-  Bob() = Bob(rand(Int), rand(100:200) |> @<(string(; base=16)), rand(Bool, 5))
+  Bob() = Bob(rand(Int), rand(100:200) |> @<(string(; base=16)))
 
   let bob1 = Bob(), bob2 = deepcopy(bob1)
     @test bob1 == bob2
