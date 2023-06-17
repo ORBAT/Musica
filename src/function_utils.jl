@@ -122,10 +122,6 @@ KYS: miks toi herjaa kun taas `const _BoundCallHeadTup = _BoundCallHead{InitArgs
 
 """
 
-
-# @inline _bind_arg_at_head(::Type{BoundCall{Head}}) where {Head} = Head |> _istrue
-
-
 const _EmptyKW = Base.Pairs{Symbol,Union{},Tuple{},NamedTuple{(),Tuple{}}}
 const _emptyKW = pairs((;))
 
@@ -272,4 +268,4 @@ end
 @inline _stable_typeof(x) = typeof(x)
 @inline _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
-export CurryHead, @©, @£, @>, @<, @x
+export @©, @£, @>, @<, @x
