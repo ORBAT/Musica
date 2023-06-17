@@ -1,8 +1,5 @@
 using Transducers, TestItems, Test, MacroTools
 
-@inline _stable_typeof(x) = typeof(x)
-@inline _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
-
 """
     repeated(fn, times)
 
@@ -37,6 +34,7 @@ end
 # # this is basically just fn composed with itself `times` times (fn ∘ fn ∘ ... )
 @inline repeated_fold(fn, times) = (input) -> (@inline; foldl((fn ∘ _left), 1:times; init=input))
 @inline repeated_iter(fn, times) = inp -> (@inline; 1:times+1 |> Iterated(fn, inp) |> TakeLast(1) |> collect |> only)
+
 @inline _left(a, _) = a
 
 ######### HUOM: tää Base.Fix:in tuunaus ei välttis oo planeetan paras idea
@@ -111,6 +109,98 @@ const CurryHeadTup = CurryHead{InitArg} where {InitArg<:Tuple}
 
 @inline (f::CurryHeadTup)(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
 @inline (f::CurryHeadTup)(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
+
+const ArgHead = Val{:CurryHead}
+const ArgTail = Val{:CurryTail}
+const ArgPos = Union{ArgHead,ArgTail}
+
+struct FnCall{InitArgPos<:ArgPos,InitArgs,F<:Function,KW} <: Function
+  f::F
+  x::InitArgs
+  kw::KW
+
+  FnCall{InitArgPos}(f::F, x; kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
+  FnCall{InitArgPos}(f::F, x...; kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
+end
+
+# const _FnCall
+# const _FnCallHead{InitArgs,F,KW} = FnCall{ArgHead,InitArgs,F,KW} where {InitArgs,F<:Function,F,KW}
+
+const _FnCallWTuple{InitArgPos} = FnCall{InitArgPos,InitArgs,F,KW} where {InitArgs<:Tuple,F,KW}
+
+# const _FnCallHeadTup = _FnCallHead{InitArgs} where {InitArgs<:Tuple}
+
+@inline (f::FnCall{ArgHead})(y; kw...) = f.f(f.x, y; _merge_nonempty(f.kw, kw)...)
+@inline (f::FnCall{ArgHead})(ys...; kw...) = f.f(f.x, ys...; _merge_nonempty(f.kw, kw)...)
+
+# @inline (f::_FnCallWTuple{ArgHead})(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
+# @inline (f::_FnCallWTuple{ArgHead})(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
+
+# const _FnCallTail{InitArgs,F,KW} = FnCall{ArgTail,InitArgs,F,KW} where {InitArgs,F<:Function,F,KW}
+
+# const _FnCallTailTup = _FnCallTail{InitArgs} where {InitArgs<:Tuple}
+
+# @inline (f::_FnCallTail)(y; kw...) = f.f(f.x, y; _merge_nonempty(f.kw, kw)...)
+# @inline (f::_FnCallTail)(ys...; kw...) = f.f(f.x, ys...; _merge_nonempty(f.kw, kw)...)
+# @inline (f::_FnCallTailTup)(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
+# @inline (f::_FnCallTailTup)(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
+
+
+#=
+@inline (f::CurryTail)(y; kw...) = f.f(y, f.x; _merge_nonempty(f.kw, kw)...)
+@inline (f::CurryTail)(ys...; kw...) = f.f(ys..., f.x; _merge_nonempty(f.kw, kw)...)
+
+# methods below are used when the initial value in f.x is a Tuple
+
+@inline (f::CurryTailTup)(y; kw...) = f.f(y, f.x...; _merge_nonempty(f.kw, kw)...)
+@inline (f::CurryTailTup)(ys...; kw...) = f.f(ys..., f.x...; _merge_nonempty(f.kw, kw)...)
+
+=#
+
+@testitem "uus FnCall" begin
+  using Musica: FnCall, ArgHead
+  fn(a, b; c=3, d) = a / (b - c)d
+
+  let cfn = FnCall{ArgHead}(fn, 1)
+    @test cfn(2; d=4) == fn(1, 2; d=4)
+    @test cfn(2; c=30, d=40) == fn(1, 2; c=30, d=40)
+  end
+
+  let cfn = FnCall{ArgHead}(fn, 1, 2)
+    @test cfn(d=4) == fn(1, 2; d=4)
+    @test cfn(c=30, d=40) == fn(1, 2; c=30, d=40)
+  end
+
+  let cfn = FnCall{ArgHead}(fn)
+    @test cfn(1, 2; d=4) == fn(1, 2; d=4)
+    @test cfn(1, 2; c=30, d=40) == fn(1, 2; c=30, d=40)
+  end
+end
+
+"""
+HOX: tulee outo herja REPL:iin jos tekee näin: 
+
+    @inline (f::_FnCallHead{<:Tuple})(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
+
+    @inline (f::_FnCallHead{<:Tuple})(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
+      #=
+      ┌ Warning: skipping callee #_#157 (called by nothing) due to UndefRefError()
+      └ @ LoweredCodeUtils ~/.julia/packages/LoweredCodeUtils/30gbF/src/signatures.jl:292
+      =#
+
+
+KYS: miks toi herjaa kun taas `const _FnCallHeadTup = _FnCallHead{InitArgs} where {InitArgs<:Tuple}`-aliaksella kaikki menee jees, vaikka ton aliaksen pitäis olla käytännössä sama:
+
+    julia> Musica._FnCallHead{<:Tuple}
+    Main.Musica.FnCall{Val{:CurryHead}, var"#s257", F} where {var"#s257"<:Tuple, F}
+
+    julia> Musica._FnCallHeadTup
+    Main.Musica.FnCall{Val{:CurryHead}, InitArgs, F} where {InitArgs<:Tuple, F}
+
+"""
+
+
+# @inline _bind_arg_at_head(::Type{FnCall{Head}}) where {Head} = Head |> _istrue
 
 struct CurryTail{InitArg,F<:Function,KW} <: Function
   f::F
@@ -248,32 +338,35 @@ macro x(ex)
 end
 
 
-@testitem "Currying" begin
+@testitem "FnCall" begin
   # TODO FIXME: curry + UnionAll-tyypin tyyppiparametriton konstruktori
-#= 
-  struct ZeroPadded{PadLen,E,T<:AbstractVector{E}} <: AbstractVector{E}
-    coll::T
-    _coll_len::Int
-    function ZeroPadded{PL,E,T}(coll) where {PL,E,T}
-      @info coll
-      @assert length(coll) ≤ PL "length(coll) $(length(coll)) wasn't ≤ PL ($PL)"
-      new{PL,E,T}(coll, length(coll))
+  #= 
+    struct ZeroPadded{PadLen,E,T<:AbstractVector{E}} <: AbstractVector{E}
+      coll::T
+      _coll_len::Int
+      function ZeroPadded{PL,E,T}(coll) where {PL,E,T}
+        @info coll
+        @assert length(coll) ≤ PL "length(coll) $(length(coll)) wasn't ≤ PL ($PL)"
+        new{PL,E,T}(coll, length(coll))
+      end
     end
-  end
-  
-  ZeroPadded(a, n) = ZeroPadded{n,Base.eltype(a),typeof(a)}(a)
 
-  @test @<(ZeroPadded(4))([1,2]).coll == ZeroPadded([1,2], 4).coll =#
+    ZeroPadded(a, n) = ZeroPadded{n,Base.eltype(a),typeof(a)}(a)
 
-  fn(a,b;c) = (a-b)c
+    @test @<(ZeroPadded(4))([1,2]).coll == ZeroPadded([1,2], 4).coll =#
+
+  fn(a, b; c) = (a - b)c
 
   # pelkkä kw arg
-  @test @<(fn(;c=5))(12,2) == 50
-  
-  # pelkkä kw pitäis toimia samalla tavalla sekä @> että @<
-  @test @>(fn(;c=5))(12,2) == 50
+  @test @<(fn(; c=5))(12, 2) == 50
 
-  @test @>(fn(12))(2;c=5) == 50
+  # pelkkä kw pitäis toimia samalla tavalla sekä @> että @<
+  @test @>(fn(; c=5))(12, 2) == 50
+
+  @test @>(fn(12))(2; c=5) == 50
 end
+
+@inline _stable_typeof(x) = typeof(x)
+@inline _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
 export CurryHead, @©, @£, @>, @<, @x
