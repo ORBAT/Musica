@@ -43,7 +43,7 @@ const ArgPos = Union{ArgHead,ArgTail}
 
 struct BoundCall{InitArgPos<:ArgPos,InitArg,F<:Function,KW} <: Function
   f::F
-  x::InitArg
+  arg::InitArg
   kw::KW
 
   BoundCall{InitArgPos}(f::F, x; kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
@@ -52,15 +52,15 @@ end
 
 const BoundCallWTuple{InitArgPos} = BoundCall{InitArgPos,InitArg} where {InitArg<:Tuple}
 
-@inline (f::BoundCall{ArgHead})(y; kw...) = f.f(f.x, y; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCall{ArgHead})(ys...; kw...) = f.f(f.x, ys...; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCallWTuple{ArgHead})(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCallWTuple{ArgHead})(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCall{ArgHead})(y; kw...) = f.f(f.arg, y; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCall{ArgHead})(ys...; kw...) = f.f(f.arg, ys...; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCallWTuple{ArgHead})(y; kw...) = f.f(f.arg..., y; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCallWTuple{ArgHead})(ys...; kw...) = f.f(f.arg..., ys...; _merge_nonempty(f.kw, kw)...)
 
-@inline (f::BoundCall{ArgTail})(x; kw...) = f.f(x, f.x; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCall{ArgTail})(xs...; kw...) = f.f(xs..., f.x; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCallWTuple{ArgTail})(x; kw...) = f.f(x, f.x...; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCallWTuple{ArgTail})(xs...; kw...) = f.f(xs..., f.x...; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCall{ArgTail})(x; kw...) = f.f(x, f.arg; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCall{ArgTail})(xs...; kw...) = f.f(xs..., f.arg; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCallWTuple{ArgTail})(x; kw...) = f.f(x, f.arg...; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCallWTuple{ArgTail})(xs...; kw...) = f.f(xs..., f.arg...; _merge_nonempty(f.kw, kw)...)
 
 
 @testitem "BoundCall" begin
