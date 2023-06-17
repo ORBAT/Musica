@@ -14,7 +14,7 @@ Compose `fn` with itself `times` times
   # sen composen kasaaminen (eli repeated_compose(fn,n) kutsu) kestää kauemmin ku mitä
   # repeated_fold
 
-  if times ≤ 20
+  if times ≤ 10
     repeated_compose(fn, times)
   else
     repeated_iter(fn, times)
@@ -37,189 +37,92 @@ end
 
 @inline _left(a, _) = a
 
-######### HUOM: tää Base.Fix:in tuunaus ei välttis oo planeetan paras idea
+const ArgHead = Val{:BindHead}
+const ArgTail = Val{:BindTail}
+const ArgPos = Union{ArgHead,ArgTail}
 
-# """
-#     Fix1(fn, x)(y1[, y2[; kwargs...]])
-# Make `Base.Fix1` work with functions with arity > 2 and with keyword arguments.
-
-# ```jldoctest
-# julia> summer = Base.Fix1(map, +);
-
-# julia> summer([1,2], [3,4])
-# 2-element Vector{Int64}:
-#  4
-#  6
-# ```
-# """
-# (f::Base.Fix1)(ys...; kwargs...) = f.f(f.x, ys...; kwargs...)
-# (f::Base.Fix2)(ys...; kwargs...) = f.f(ys..., f.x; kwargs...)
-
-"""
-    CurryHead(fn, a)
-    CurryHead(fn, a, b)
-    CurryHead(fn, a; kw = 1)
-
-Curry a function call so that arguments are bound starting from the first (left). `CurryHead(fn, a)(b, c) == fn(a, b, c)`.
-
-  
-```jldoctest
-julia> plus1 = CurryHead(+, 1);
-
-julia> plus1(2)
-3
-
-julia> plus1(2,3)
-6
-
-julia> digger = CurryHead(digits, Int; base=2);
-
-julia> show(digger(20; pad=8))
-[0, 0, 1, 0, 1, 0, 0, 0]
-
-julia> show(digger(20))
-[0, 0, 1, 0, 1]
-
-julia> fn = (a, b, c, d; kw1, kw2) -> (a + b + c + d)kw1 // kw2;
-
-julia> curried = CurryHead(fn, 1, 2; kw1 = 13);
-
-julia> curried(3, 40; kw2 = 1000)
-299//500
-```
-"""
-struct CurryHead{InitArg,F<:Function,KW} <: Function
+struct BoundCall{InitArgPos<:ArgPos,InitArg,F<:Function,KW} <: Function
   f::F
   x::InitArg
   kw::KW
 
-  CurryHead(f::F, x; kwargs...) where {F} = new{_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
-  CurryHead(f::F, x...; kwargs...) where {F} = new{_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
+  BoundCall{InitArgPos}(f::F, x; kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
+  BoundCall{InitArgPos}(f::F, x...; kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
 end
 
-const CurryHeadTup = CurryHead{InitArg} where {InitArg<:Tuple}
+const BoundCallWTuple{InitArgPos} = BoundCall{InitArgPos,InitArg} where {InitArg<:Tuple}
 
-# HUOM: turha määritellä esim (f::CurryHead)(y) = f.f(f.x, y; f.kw...), koska funktio parametreilla (y; kw...) näyttää aina rynnivän yli
-# kwargittomasta versiosta. Tää taitaa liittyä jotenkin siihen miten kwargit toimii konepellin alla
+@inline (f::BoundCall{ArgHead})(y; kw...) = f.f(f.x, y; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCall{ArgHead})(ys...; kw...) = f.f(f.x, ys...; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCallWTuple{ArgHead})(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCallWTuple{ArgHead})(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
 
-@inline (f::CurryHead)(y; kw...) = f.f(f.x, y; _merge_nonempty(f.kw, kw)...)
-@inline (f::CurryHead)(ys...; kw...) = f.f(f.x, ys...; _merge_nonempty(f.kw, kw)...)
-
-# methods below are used when the value in f.x is a Tuple, ie. when multiple arguments were bound
-
-@inline (f::CurryHeadTup)(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
-@inline (f::CurryHeadTup)(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
-
-const ArgHead = Val{:CurryHead}
-const ArgTail = Val{:CurryTail}
-const ArgPos = Union{ArgHead,ArgTail}
-
-struct FnCall{InitArgPos<:ArgPos,InitArgs,F<:Function,KW} <: Function
-  f::F
-  x::InitArgs
-  kw::KW
-
-  FnCall{InitArgPos}(f::F, x; kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
-  FnCall{InitArgPos}(f::F, x...; kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
-end
-
-# const _FnCall
-# const _FnCallHead{InitArgs,F,KW} = FnCall{ArgHead,InitArgs,F,KW} where {InitArgs,F<:Function,F,KW}
-
-const _FnCallWTuple{InitArgPos} = FnCall{InitArgPos,InitArgs,F,KW} where {InitArgs<:Tuple,F,KW}
-
-# const _FnCallHeadTup = _FnCallHead{InitArgs} where {InitArgs<:Tuple}
-
-@inline (f::FnCall{ArgHead})(y; kw...) = f.f(f.x, y; _merge_nonempty(f.kw, kw)...)
-@inline (f::FnCall{ArgHead})(ys...; kw...) = f.f(f.x, ys...; _merge_nonempty(f.kw, kw)...)
-
-# @inline (f::_FnCallWTuple{ArgHead})(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
-# @inline (f::_FnCallWTuple{ArgHead})(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
-
-# const _FnCallTail{InitArgs,F,KW} = FnCall{ArgTail,InitArgs,F,KW} where {InitArgs,F<:Function,F,KW}
-
-# const _FnCallTailTup = _FnCallTail{InitArgs} where {InitArgs<:Tuple}
-
-# @inline (f::_FnCallTail)(y; kw...) = f.f(f.x, y; _merge_nonempty(f.kw, kw)...)
-# @inline (f::_FnCallTail)(ys...; kw...) = f.f(f.x, ys...; _merge_nonempty(f.kw, kw)...)
-# @inline (f::_FnCallTailTup)(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
-# @inline (f::_FnCallTailTup)(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCall{ArgTail})(x; kw...) = f.f(x, f.x; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCall{ArgTail})(xs...; kw...) = f.f(xs..., f.x; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCallWTuple{ArgTail})(x; kw...) = f.f(x, f.x...; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCallWTuple{ArgTail})(xs...; kw...) = f.f(xs..., f.x...; _merge_nonempty(f.kw, kw)...)
 
 
-#=
-@inline (f::CurryTail)(y; kw...) = f.f(y, f.x; _merge_nonempty(f.kw, kw)...)
-@inline (f::CurryTail)(ys...; kw...) = f.f(ys..., f.x; _merge_nonempty(f.kw, kw)...)
-
-# methods below are used when the initial value in f.x is a Tuple
-
-@inline (f::CurryTailTup)(y; kw...) = f.f(y, f.x...; _merge_nonempty(f.kw, kw)...)
-@inline (f::CurryTailTup)(ys...; kw...) = f.f(ys..., f.x...; _merge_nonempty(f.kw, kw)...)
-
-=#
-
-@testitem "uus FnCall" begin
-  using Musica: FnCall, ArgHead
+@testitem "BoundCall" begin
+  using Musica: BoundCall, ArgHead, ArgTail
   fn(a, b; c=3, d) = a / (b - c)d
 
-  let cfn = FnCall{ArgHead}(fn, 1)
-    @test cfn(2; d=4) == fn(1, 2; d=4)
-    @test cfn(2; c=30, d=40) == fn(1, 2; c=30, d=40)
+  let bfn = BoundCall{ArgHead}(fn, 1)
+    @test bfn(2; d=4) == fn(1, 2; d=4)
+    @test bfn(2; c=30, d=40) == fn(1, 2; c=30, d=40)
   end
 
-  let cfn = FnCall{ArgHead}(fn, 1, 2)
-    @test cfn(d=4) == fn(1, 2; d=4)
-    @test cfn(c=30, d=40) == fn(1, 2; c=30, d=40)
+  let bfn = BoundCall{ArgHead}(fn, 1, 2)
+    @test bfn(;d=4) == fn(1, 2; d=4)
+    @test bfn(c=30, d=40) == fn(1, 2; c=30, d=40)
   end
 
-  let cfn = FnCall{ArgHead}(fn)
-    @test cfn(1, 2; d=4) == fn(1, 2; d=4)
-    @test cfn(1, 2; c=30, d=40) == fn(1, 2; c=30, d=40)
+  let bfn = BoundCall{ArgHead}(fn)
+    @test bfn(1, 2; d=4) == fn(1, 2; d=4)
+    @test bfn(1, 2; c=30, d=40) == fn(1, 2; c=30, d=40)
+  end
+
+  let bfn = BoundCall{ArgTail}(fn, 2)
+    @test bfn(1; d=4) == fn(1, 2; d=4)
+    @test bfn(1; c=30, d=40) == fn(1, 2; c=30, d=40)
+  end
+
+  let bfn = BoundCall{ArgTail}(fn, 1, 2)
+    @test bfn(d=4) == fn(1, 2; d=4)
+    @test bfn(c=30, d=40) == fn(1, 2; c=30, d=40)
+  end
+
+  let bfn = BoundCall{ArgTail}(fn)
+    @test bfn(1, 2; d=4) == fn(1, 2; d=4)
+    @test bfn(1, 2; c=30, d=40) == fn(1, 2; c=30, d=40)
   end
 end
 
 """
 HOX: tulee outo herja REPL:iin jos tekee näin: 
 
-    @inline (f::_FnCallHead{<:Tuple})(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
+    @inline (f::_BoundCallHead{<:Tuple})(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
 
-    @inline (f::_FnCallHead{<:Tuple})(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
+    @inline (f::_BoundCallHead{<:Tuple})(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
       #=
       ┌ Warning: skipping callee #_#157 (called by nothing) due to UndefRefError()
       └ @ LoweredCodeUtils ~/.julia/packages/LoweredCodeUtils/30gbF/src/signatures.jl:292
       =#
 
 
-KYS: miks toi herjaa kun taas `const _FnCallHeadTup = _FnCallHead{InitArgs} where {InitArgs<:Tuple}`-aliaksella kaikki menee jees, vaikka ton aliaksen pitäis olla käytännössä sama:
+KYS: miks toi herjaa kun taas `const _BoundCallHeadTup = _BoundCallHead{InitArgs} where {InitArgs<:Tuple}`-aliaksella kaikki menee jees, vaikka ton aliaksen pitäis olla käytännössä sama:
 
-    julia> Musica._FnCallHead{<:Tuple}
-    Main.Musica.FnCall{Val{:CurryHead}, var"#s257", F} where {var"#s257"<:Tuple, F}
+    julia> Musica._BoundCallHead{<:Tuple}
+    Main.Musica.BoundCall{Val{:CurryHead}, var"#s257", F} where {var"#s257"<:Tuple, F}
 
-    julia> Musica._FnCallHeadTup
-    Main.Musica.FnCall{Val{:CurryHead}, InitArgs, F} where {InitArgs<:Tuple, F}
+    julia> Musica._BoundCallHeadTup
+    Main.Musica.BoundCall{Val{:CurryHead}, InitArgs, F} where {InitArgs<:Tuple, F}
 
 """
 
 
-# @inline _bind_arg_at_head(::Type{FnCall{Head}}) where {Head} = Head |> _istrue
+# @inline _bind_arg_at_head(::Type{BoundCall{Head}}) where {Head} = Head |> _istrue
 
-struct CurryTail{InitArg,F<:Function,KW} <: Function
-  f::F
-  x::InitArg
-  kw::KW
-
-  CurryTail(f::F, x; kwargs...) where {F} = new{_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
-  CurryTail(f::F, x...; kwargs...) where {F} = new{_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
-end
-
-const CurryTailTup = CurryTail{InitArg} where {InitArg<:Tuple}
-
-@inline (f::CurryTail)(y; kw...) = f.f(y, f.x; _merge_nonempty(f.kw, kw)...)
-@inline (f::CurryTail)(ys...; kw...) = f.f(ys..., f.x; _merge_nonempty(f.kw, kw)...)
-
-# methods below are used when the initial value in f.x is a Tuple
-
-@inline (f::CurryTailTup)(y; kw...) = f.f(y, f.x...; _merge_nonempty(f.kw, kw)...)
-@inline (f::CurryTailTup)(ys...; kw...) = f.f(ys..., f.x...; _merge_nonempty(f.kw, kw)...)
 
 const _EmptyKW = Base.Pairs{Symbol,Union{},Tuple{},NamedTuple{(),Tuple{}}}
 const _emptyKW = pairs((;))
@@ -231,7 +134,7 @@ const _emptyKW = pairs((;))
 @inline _merge_nonempty(::_EmptyKW, ::_EmptyKW) = _emptyKW
 
 macro ©(ex)
-  _curried(ex, :CurryHead)
+  _bound(ex, :BindHead)
 end
 
 """
@@ -239,11 +142,11 @@ end
     @> fn(a, b)
     @> fn(a; kw=1)
 
-Curry a function call so that arguments are bound starting from the first (left). The argument must be a function call with at least one argument, and zero or more keyword arguments.
+Bind a function call so that arguments are bound starting from the first (left). The argument must be a function call with at least one argument, and zero or more keyword arguments.
 
-    curried = @> fn(a,b); curried(c, d) == fn(a, b, c, d)
+    bound = @> fn(a,b); bound(c, d) == fn(a, b, c, d)
 
-See [`CurryHead`](@ref).
+See [`BoundCall`](@ref).
 
 ```jldoctest
 julia> a = 1; plus1 = @> +(a);
@@ -264,21 +167,21 @@ julia> show(to_binary_digits(20))
 
 julia> fn = (a, b, c, d; kw1, kw2) -> (a+b+c+d)kw1 // kw2;
 
-julia> curried = @> fn(1, 2; kw1 = 13);
+julia> bound = @> fn(1, 2; kw1 = 13);
 
-julia> curried(3, 4; kw2 = 1000) # same as fn(1, 2, 3, 4; kw1 = 13, kw2 = 1000)
+julia> bound(3, 4; kw2 = 1000) # same as fn(1, 2, 3, 4; kw1 = 13, kw2 = 1000)
 13//100
 
 ```
-julia> fn(1, 2, 3, 4; kw1 = 13, kw2 = 1000) == curried(3, 4; kw2 = 1000)
+julia> fn(1, 2, 3, 4; kw1 = 13, kw2 = 1000) == bound(3, 4; kw2 = 1000)
 true
 """
 macro >(ex)
-  _curried(ex, :CurryHead)
+  _bound(ex, :BindHead)
 end
 
 macro £(ex)
-  _curried(ex, :CurryTail)
+  _bound(ex, :BindTail)
 end
 
 """
@@ -286,7 +189,7 @@ end
 @< fn(a, b)
 @< fn(a; kw=1)
 
-Convenience macro for constructing a [`CurryTail`](@ref). The argument must be a function call with at least one argument, 
+Bind a function call so that arguments are bound starting from the tail (right). The argument must be a function call with at least one argument, 
 and zero or more keyword arguments.
 
 ```jldoctest
@@ -303,10 +206,10 @@ true
 
 """
 macro <(ex)
-  _curried(ex, :CurryTail)
+  _bound(ex, :BindTail)
 end
 
-function _curried(ex, Constructor)
+function _bound(ex, argpos)
   @capture(ex, fn_(args__; kws__) | fn_(args__)) || error("Not used on a function call? Syntax: @> f(a, b; c = 1)")
   if length(args) == 0 && length(kws) == 0
     error("Function call had no regular or keyword arguments. Syntax: @> f(a, b; c = 1)")
@@ -318,10 +221,8 @@ function _curried(ex, Constructor)
   args = map(esc, args)
   isnothing(kws) ? kws = Any[] : kws = map(esc, kws)
 
-  # @debug "after esc" fn args kws
-
   quote
-    $Constructor($fn, $(args...); $(kws...))
+    Musica.BoundCall{Val{$(QuoteNode(argpos))}}($fn, $(args...); $(kws...))
   end
 end
 
@@ -338,7 +239,7 @@ macro x(ex)
 end
 
 
-@testitem "FnCall" begin
+@testitem "macros" begin
   # TODO FIXME: curry + UnionAll-tyypin tyyppiparametriton konstruktori
   #= 
     struct ZeroPadded{PadLen,E,T<:AbstractVector{E}} <: AbstractVector{E}
