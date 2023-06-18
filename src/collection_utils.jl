@@ -103,7 +103,7 @@ julia> map(x->2x, nothing)
 
 ```
 """
-@inline Base.map(f, @nospecialize(::_Nothing)) = nothing
+@inline Base.map(f, @nospecialize(::Nothingness)) = nothing
 
 @testitem "Maybe" begin
   using Random
