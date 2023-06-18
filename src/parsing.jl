@@ -216,3 +216,194 @@ end
 
 
 =#
+
+module Parsing
+
+using ..Musica
+using StaticArrays
+using Transducers
+using Transducers: Eduction
+using TestItems
+
+abstract type Parser{Out} <: Function end
+
+struct State{Out,Rest}
+  output::Out
+  remaining_input::Rest
+end
+
+function Base.:(==)(a::State, b::State)
+  Musica.maybe_collect(a.output) == Musica.maybe_collect(b.output) &&
+  Musica.maybe_collect(a.remaining_input) == Musica.maybe_collect(b.remaining_input)
+end
+
+
+function Base.show(io::IO, s::State)
+  print(io, "State(")
+  show(io, Musica.maybe_collect(s.output))
+  print(io, ", ")
+  show(io, Musica.maybe_collect(s.remaining_input))
+  print(io, ")")
+end
+
+function Base.show(io::IO, T::Type{<:State{O,R}}) where {O,R}
+  out = O <: Eduction ? "Eduction" : string(O)
+  rest = R <: Eduction ? "Eduction" : string(R)
+  print(io, "State{", out, ",", rest, "}")
+end
+
+function _concat_output(s::State, o, inp)
+  State((s.output, o) |> Cat(), inp)
+end
+
+abstract type Result end
+
+struct Success{S<:State} <: Result
+  state::S
+  # Success(s::State) = new{typeof(s)}(s)
+end
+
+function Base.:(==)(a::Success, b::Success)
+  a.state == b.state
+end
+
+
+function Base.show(io::IO, s::Success)
+  print(io, "Success(")
+  show(io, s.state)
+  print(io, ")")
+end
+
+struct Failure <: Result end
+
+#=
+HUOM const fieldit mutable structeissa
+mutable struct Testi
+    const bleb::Int
+    bb::Int
+end
+=#
+
+"""
+TODO: parseri / matcheri joka vaatii jonkun tarkan patternin, mutta ei lisää mitään outputtia Stateen
+"""
+struct Exact{T<:AbstractVector} <: Parser{T}
+  pattern::T
+end
+
+function Base.show(io::IO, ::Type{<:Exact{T}}) where {T}
+  print(io, "Exact{", T, "}")
+end
+
+
+function (e::Exact)(inp::State)
+  if isempty(inp.remaining_input)
+    return Failure()
+  end
+  pat_len = length(e.pattern)
+  inp_rest = inp.remaining_input |> Drop(pat_len)
+  got = inp.remaining_input |> Take(pat_len) |> collect
+  if got == e.pattern
+    Success(_concat_output(inp, e.pattern, inp_rest))
+  else
+    Failure()
+  end
+  # end
+end
+
+struct Or{A,B,PA<:Parser{A},PB<:Parser{B}} <: Parser{Union{A,B}}
+  pa::PA
+  pb::PB
+end
+
+function Base.show(io::IO, T::Type{<:Or{A,B,PA,PB}}) where {A,B,PA,PB}
+  print(io, "Or{", PA, ",", PB, "}")
+end
+
+_first_of() = Failure()
+
+function _first_of(p1::Function, ps::Function...)
+  res = p1()
+  if res isa Function
+    () -> _first_of(res, ps...)
+  elseif res isa Success
+    res
+  else
+    () -> _first_of(ps...)
+  end
+end
+
+function (o::Or)(inp::State)::Union{Function,Result}
+  _first_of(@>(o.pa(inp)), @>(o.pb(inp)))
+end
+
+
+struct And{A,B,PA<:Parser{A},PB<:Parser{B}} <: Parser{Union{A,B}}
+  pa::PA
+  pb::PB
+end
+
+function Base.show(io::IO, T::Type{<:And{A,B,PA,PB}}) where {A,B,PA,PB}
+  print(io, "And{", PA, ",", PB, "}")
+end
+
+
+#käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten seuraavalle
+function _all_of(curr_res::Success, p::Parser, ps::Parser...)
+  res = p(curr_res.state)
+  _all_of(res, ps...)
+end
+
+#jos eka arg on thunk, palauta thunk jossa kutsutaan _all_of resolvatulla arvolla
+_all_of(s_thunk::Function, ps...) = () -> _all_of(s_thunk(), ps...)
+# ketjun viimeinen Success -> koko paska menee läpi
+_all_of(s::Success) = s
+# Failure missä tahansa kohtaa ketjua -> fail
+_all_of(::Failure, @nospecialize(ps...)) = Failure()
+
+
+function (a::And)(inp::State)
+  _all_of(Success(inp), a.pa, a.pb)
+end
+
+function execute(p::Parser, s::State)
+  res::Union{Function,Result} = p(s)
+  while res isa Function
+    res = res()
+  end
+  res
+end
+
+@testitem "Or" begin
+  p1 = Parsing.Exact([1, 1])
+  p2 = Parsing.Exact([0, 0])
+  let s = Parsing.State(Any[], Bool[1, 1, 0, 0])
+    @test Parsing.execute(Parsing.Or(p1, p2), s) == Parsing.Success(Parsing.State([1,1], [0,0]))
+  end
+
+  let s = Parsing.State(Any[], Bool[1, 1, 0, 0])
+    @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([1,1], [0,0]))
+  end
+
+  let s = Parsing.State(Any[], Bool[1, 0, 1, 0])
+    @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Failure()
+  end
+end
+
+@testitem "And" begin
+  using Test
+  p1 = Parsing.Exact([1, 1])
+  p2 = Parsing.Exact([0, 0])
+  let s = Parsing.State(Any[], Bool[1, 1, 0, 0])
+    @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Success(Parsing.State([1,1,0,0], []))
+  end
+
+  let s = Parsing.State(Any[], Bool[1, 1, 1, 0])
+    @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Failure()
+  end
+end
+
+
+end
+
+export Parsing
