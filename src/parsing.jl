@@ -304,7 +304,7 @@ function (e::Exact)(inp::State)
   inp_rest = inp.remaining_input |> Drop(pat_len)
   got = inp.remaining_input |> Take(pat_len) |> collect
   if got == e.pattern
-    Success(_concat_output(inp, e.pattern, inp_rest))
+    Success(_concat_output(inp, [e.pattern], inp_rest))
   else
     Failure()
   end
@@ -320,21 +320,27 @@ function Base.show(io::IO, T::Type{<:Or{A,B,PA,PB}}) where {A,B,PA,PB}
   print(io, "Or{", PA, ",", PB, "}")
 end
 
-_first_of() = Failure()
-
-function _first_of(p1::Function, ps::Function...)
+# käy läpi thunkkeja kunnes joku niistä palauttaa Success
+function _any(p1::Function, ps::Function...)
   res = p1()
+
   if res isa Function
-    () -> _first_of(res, ps...)
+    # res oli thunk. Palautetaan thunk, jossa se resolvataan
+    () -> _any(res, ps...)
   elseif res isa Success
+    # res oli Success -> katkastaan "ketju"
     res
   else
-    () -> _first_of(ps...)
+    # res oli Failure, kokeillaan loppuja thunkkeja
+    () -> _any(ps...)
   end
 end
 
+# loppu thunkit kesken -> fail
+_any() = Failure()
+
 function (o::Or)(inp::State)::Union{Function,Result}
-  _first_of(@>(o.pa(inp)), @>(o.pb(inp)))
+  _any(@>(o.pa(inp)), @>(o.pb(inp)))
 end
 
 
@@ -348,10 +354,10 @@ function Base.show(io::IO, T::Type{<:And{A,B,PA,PB}}) where {A,B,PA,PB}
 end
 
 
-#käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten seuraavalle
+# käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten seuraavalle.
+# vrt _first_of, jossa ei tarvii kuljettaa tota resulttia mukana, koska kaikki sille annettavat parserit saa saman inputin
 function _all_of(curr_res::Success, p::Parser, ps::Parser...)
-  res = p(curr_res.state)
-  _all_of(res, ps...)
+  _all_of(p(curr_res.state), ps...)
 end
 
 #jos eka arg on thunk, palauta thunk jossa kutsutaan _all_of resolvatulla arvolla
@@ -378,15 +384,15 @@ end
   p1 = Parsing.Exact(Bool[1, 1])
   p2 = Parsing.Exact(Bool[0, 0])
   let s = Parsing.State(Bool[], Bool[1, 1, 0, 0])
-    @test Parsing.execute(Parsing.Or(p1, p2), s) == Parsing.Success(Parsing.State([1,1], [0,0]))
+    @test Parsing.execute(Parsing.Or(p1, p2), s) == Parsing.Success(Parsing.State([[1,1]], [0,0]))
   end
 
   let s = Parsing.State(Bool[], Bool[1, 1, 0, 0])
-    @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([1,1], [0,0]))
+    @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([[1,1]], [0,0]))
     @test begin
       out = Parsing.execute(Parsing.Or(p2, p1), s)
       !(out isa Parsing.Success) && error("unexpected failure")
-      typeof(Musica.maybe_collect(out.state.output)) == Vector{Bool}
+      typeof(Musica.maybe_collect(out.state.output)) == Vector{Vector{Bool}}
     end
   end
 
@@ -401,11 +407,11 @@ end
   p2 = Parsing.Exact(Bool[0, 0])
   
   let s = Parsing.State(Bool[], Bool[1, 1, 0, 0])
-    @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Success(Parsing.State([1,1,0,0], []))
+    @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Success(Parsing.State([[1,1],[0,0]], []))
     @test begin
       out = Parsing.execute(Parsing.And(p1, p2), s)
       !(out isa Parsing.Success) && error("unexpected failure")
-      typeof(Musica.maybe_collect(out.state.output)) == Vector{Bool}
+      typeof(Musica.maybe_collect(out.state.output)) == Vector{Vector{Bool}}
     end
   end
 
