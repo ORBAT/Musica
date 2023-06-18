@@ -60,7 +60,7 @@ end =#
   rng::Maybe{Xoshiro} = nothing
 end
 
-Options(go, mo, obj_fn, rng) = Options{typeof(go),typeof(obj_fn)}(go, mo, obj_fn, rng)
+Options(go, mo, obj_fn, rng) = Options{typeof(go),Core.Typeof(obj_fn)}(go, mo, obj_fn, rng)
 
 @forward Options.genome_opts (genome_min_length, genome_max_length, clamp_genome_length!)
 
