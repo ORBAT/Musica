@@ -228,10 +228,13 @@ using TestItems
 abstract type Parser{Out} <: Function end
 
 """
-- `Out` on se minkä tyyppinen `output` on jos se on jotain muuta ku `nothing`
-- `OT` on `output`-fieldin "oikea" tyyppi, eli jotain `<: Maybe{Out}`
-- `In` on inputin "pohjimmainen" tyyppi
-- `IT` on joko `In` tai sit `Eduction`
+
+## TODO FIXME: pääsiskö OT:sta eroon ny kun löytyy TNothing?
+
+- `Out` on se minkä tyyppinen `output` on jos se on jotain muuta ku `nothing`. Outputin "pohjimmainen tyyppi"
+- `OT` on `output`-fieldin "käytännön" tyyppi, eli jotain `<: Maybe{Out}`
+- `In` on inputin "pohjimmainen tyyppi", eli se tyyppi jonka `State` saa outputtina ulos
+- `IT` on  on joko `In` tai sit `Eduction`
 """
 struct State{Out,In,OT<:Maybe{Out},IT<:Union{In,<:Eduction}}
   output::OT
@@ -242,7 +245,7 @@ function State{Out,In}(o::Maybe{Out}, inp) where {Out,In}
   State{Out,In,typeof(o),typeof(inp)}(o, inp)
 end
 
-## TODO FIXME: miksi tää ei toimi???? Tulee vaan jotain "no method matching (Musica.Parsing.State" blah
+## TODO KYS: miksi tää ei toimi???? Tulee vaan jotain "no method matching (Musica.Parsing.State" blah
 # function State{Out}(o, inp::In) where {Out,In}
 #   State{Out,In,typeof(o),In}(o, inp)
 # end
