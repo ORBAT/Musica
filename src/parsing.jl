@@ -374,31 +374,42 @@ function execute(p::Parser, s::State)
   res
 end
 
-@testitem "Or" begin
-  p1 = Parsing.Exact([1, 1])
-  p2 = Parsing.Exact([0, 0])
-  let s = Parsing.State(Any[], Bool[1, 1, 0, 0])
+@testitem "Parsing.Or" begin
+  p1 = Parsing.Exact(Bool[1, 1])
+  p2 = Parsing.Exact(Bool[0, 0])
+  let s = Parsing.State(Bool[], Bool[1, 1, 0, 0])
     @test Parsing.execute(Parsing.Or(p1, p2), s) == Parsing.Success(Parsing.State([1,1], [0,0]))
   end
 
-  let s = Parsing.State(Any[], Bool[1, 1, 0, 0])
+  let s = Parsing.State(Bool[], Bool[1, 1, 0, 0])
     @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([1,1], [0,0]))
+    @test begin
+      out = Parsing.execute(Parsing.Or(p2, p1), s)
+      !(out isa Parsing.Success) && error("unexpected failure")
+      typeof(Musica.maybe_collect(out.state.output)) == Vector{Bool}
+    end
   end
 
-  let s = Parsing.State(Any[], Bool[1, 0, 1, 0])
+  let s = Parsing.State(Bool[], Bool[1, 0, 1, 0])
     @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Failure()
   end
 end
 
-@testitem "And" begin
+@testitem "Parsing.And" begin
   using Test
-  p1 = Parsing.Exact([1, 1])
-  p2 = Parsing.Exact([0, 0])
-  let s = Parsing.State(Any[], Bool[1, 1, 0, 0])
+  p1 = Parsing.Exact(Bool[1, 1])
+  p2 = Parsing.Exact(Bool[0, 0])
+  
+  let s = Parsing.State(Bool[], Bool[1, 1, 0, 0])
     @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Success(Parsing.State([1,1,0,0], []))
+    @test begin
+      out = Parsing.execute(Parsing.And(p1, p2), s)
+      !(out isa Parsing.Success) && error("unexpected failure")
+      typeof(Musica.maybe_collect(out.state.output)) == Vector{Bool}
+    end
   end
 
-  let s = Parsing.State(Any[], Bool[1, 1, 1, 0])
+  let s = Parsing.State(Bool[], Bool[1, 1, 1, 0])
     @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Failure()
   end
 end
