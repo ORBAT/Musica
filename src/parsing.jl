@@ -434,6 +434,12 @@ struct And{A,B,PA<:Parser{A},PB<:Parser{B}} <: Parser{Tuple{A,B}}
   pb::PB
 end
 
+
+function _first_output_type(::Type{<:And{A}}) where {A}
+  A
+end
+
+
 # function Base.show(io::IO, T::Type{<:And{A,B,PA,PB}}) where {A,B,PA,PB}
 #   print(io, "And{", PA, ",", PB, "}")
 # end
@@ -462,15 +468,10 @@ _execute(res) = res
 
 function execute(p::Parser, s::State)
   _execute(p(s))
-  # res = p(s)
-  # while res isa Function
-  #   res = res()
-  # end
-  # res
 end
 
 function execute(p::P, inp::In) where {Out,In,P<:Parser{Out}}
-  # HOX: jos vaan käyttää Out:ia, niin esim. execute(And(p1, p2), Bool[1,1,0,0]) antais
+  # HOX: jos vaan käyttää State{Out}, niin esim. execute(And(p1, p2), Bool[1,1,0,0]) antais
   # State:n tyypiksi State{Tuple{A,B}} eikä State{A} niinko pitäisi
 
   execute(p, State{_first_output_type(P),In}(nothing, inp))
@@ -478,10 +479,6 @@ end
 
 function _first_output_type(::Type{<:Parser{O}}) where {O}
   O
-end
-
-function _first_output_type(::Type{<:And{A}}) where {A}
-  A
 end
 
 _first_output_type(p::Parser) = _first_output_type(typeof(p))
