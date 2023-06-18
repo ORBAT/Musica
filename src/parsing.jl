@@ -322,7 +322,6 @@ abstract type Result end
 
 struct Success{S<:State} <: Result
   state::S
-  # Success(s::State) = new{typeof(s)}(s)
 end
 
 function Base.:(==)(a::Success, b::Success)
@@ -410,7 +409,7 @@ end
 # loppu thunkit kesken -> fail
 _any() = Failure()
 
-function (o::Or)(inp::State)::Union{Function,Result}
+function (o::Or)(inp::State)
   _any(@>(o.pa(inp)), @>(o.pb(inp)))
 end
 
@@ -455,18 +454,32 @@ function execute(p::Parser, s::State)
   # res
 end
 
-function execute(p::Parser{Out}, inp::In) where {Out,In}
-  execute(p, State{Out,In}(nothing, inp))
+function execute(p::P, inp::In) where {Out,In,P<:Parser{Out}}
+  # HOX: jos vaan käyttää Out:ia, niin esim. execute(And(p1, p2), Bool[1,1,0,0]) antais
+  # State:n tyypiksi State{Tuple{A,B}} eikä State{A} niinko pitäisi
+
+  execute(p, State{_first_output_type(P),In}(nothing, inp))
 end
 
+function _first_output_type(::Type{<:Parser{O}}) where {O}
+  O
+end
+
+function _first_output_type(::Type{<:And{A}}) where {A}
+  A
+end
+
+_first_output_type(p::Parser) = _first_output_type(typeof(p))
+
 @testitem "Parsing.Or" begin
+  inp = Bool[1, 1, 0, 0]
   p1 = Parsing.Exact(Bool[1, 1])
   p2 = Parsing.Exact(Bool[0, 0])
-  let s = Parsing.State{Vector{Bool},Vector{Bool}}(nothing, Bool[1, 1, 0, 0])
+  let s = Parsing.State{Vector{Bool},Vector{Bool}}(nothing, inp)
     @test Parsing.execute(Parsing.Or(p1, p2), s) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
   end
 
-  let s = Parsing.State{Vector{Bool},Vector{Bool}}(nothing, Bool[1, 1, 0, 0])
+  let s = Parsing.State{Vector{Bool},Vector{Bool}}(nothing, inp)
     @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
     @test begin
       out = Parsing.execute(Parsing.Or(p2, p1), s)
@@ -479,16 +492,18 @@ end
     @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Failure()
   end
 
-  @test Parsing.execute(Parsing.Or(p1, p2), Bool[1, 1, 0, 0]) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
+  @test Parsing.execute(Parsing.Or(p1, p2), inp) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
 end
 
 @testitem "Parsing.And" begin
   using Test
+  using Musica.Parsing: Success, State
+  inp = Bool[1, 1, 0, 0]
   p1 = Parsing.Exact(Bool[1, 1])
   p2 = Parsing.Exact(Bool[0, 0])
 
-  let s = Parsing.State{Vector{Bool},Vector{Bool}}(nothing, Bool[1, 1, 0, 0])
-    @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Success(Parsing.State([[1, 1], [0, 0]], []))
+  let s = State{Vector{Bool},Vector{Bool}}(nothing, inp)
+    @test Parsing.execute(Parsing.And(p1, p2), s) == Success(State((Bool[1, 1], Bool[0, 0]), Any[])) 
     # @test begin
     #   out = Parsing.execute(Parsing.And(p1, p2), s)
     #   !(out isa Parsing.Success) && error("unexpected failure")
@@ -496,9 +511,14 @@ end
     # end
   end
 
-  let s = Parsing.State(Bool[], Bool[1, 1, 1, 0])
+  @test Parsing.execute(Parsing.And(p1,p2), inp) == Success(State((Bool[1, 1], Bool[0, 0]), Any[])) 
+
+  let s = State(Bool[], Bool[1, 1, 1, 0])
     @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Failure()
   end
+
+  @test Parsing._first_output_type(Parsing.And(p1, p2)) == Vector{Bool}
+
 end
 
 
