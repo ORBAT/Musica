@@ -8,6 +8,8 @@ const Nothingness{T} = Union{Nothing,TNothing{T}}
 
 ## HOX FIXME: tyypittämätön nothing on vähän hankala. Esim sen takia jouduin Parsing.State:een
 ## heittämään erillisen Out ja OT -tyypin: struct State{Out,In,OT<:Maybe{Out},IT<:Union{In,<:Eduction}}
+##
+## HOX HOX HOX: TNothing ei auta mitään esim Parsing.State(tnothing(UInt64), [[1,1],[0,0]]) koska toi tnothing tietty on tyyppi TNothing{T} eikä T...
 const Maybe{T} = Union{Some{T},T,Nothingness{T}}
 
 @inline Base.isnothing(@nospecialize(::TNothing)) = true

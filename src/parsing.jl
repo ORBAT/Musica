@@ -230,6 +230,17 @@ abstract type Parser{Out} <: Function end
 """
 
 ## TODO FIXME: pääsiskö OT:sta eroon ny kun löytyy TNothing?
+##### ---> HUOM EI PÄÄSE: 
+
+    let s = Parsing.State(tnothing(UInt64), [[1,1],[0,0]])
+      @show s
+    end
+
+    State:n Out:ista tulee tietty TNothing{T}...
+
+Mut kun vaihdoin State{Out,In,IT<:Union{In,<:Eduction}}, niin
+siltikin 
+
 
 - `Out` on se minkä tyyppinen `output` on jos se on jotain muuta ku `nothing`. Outputin "pohjimmainen tyyppi"
 - `OT` on `output`-fieldin "käytännön" tyyppi, eli jotain `<: Maybe{Out}`
@@ -273,20 +284,6 @@ function Base.show(io::IO, s::State)
   print(io, ")")
 end
 
-### FIXME: ei toimi????
-# function Base.show(io::IO, ::Type{<:State{O,I,OT,IT}}) where {O,I,OT,IT}
-#   print(io, "State{", O)
-#   if !(OT <: O)
-#     print(io, "=", OT)
-#   end
-#   print(io, ",", I)
-#   if !(IT <: I)
-#     it_short_name = IT <: Transducers.Eduction ? "Eduction" : string(IT)
-#     print(io, "=", it_short_name)
-#   end
-#   print(io, "}")
-# end
-
 function Base.show(io::IO, ::Type{State{O,I,OT,IT}}) where {O,I,OT,IT}
   # print(io, "State{",O,",",I,",",OT,",",IT,"}")
 
@@ -301,6 +298,13 @@ function Base.show(io::IO, ::Type{State{O,I,OT,IT}}) where {O,I,OT,IT}
   end
   print(io, "}")
 end
+
+
+#### TODO HOX: TNothing käyttäminen näin tai sit <:Nothingness tmv vetää
+#### kääntäjän ikuiseen luuppiin jostain syystä
+# function concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,TNothing{O},IT}}
+#   State{O,I,typeof(o),typeof(inp)}(o, inp)
+# end
 
 function concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,Nothing,IT}}
   State{O,I,typeof(o),typeof(inp)}(o, inp)
