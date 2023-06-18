@@ -22,14 +22,14 @@ Generally a `Parser` takes an `AbstractArray` input, parses it and returns lefto
 
 See [`parser`](@ref) methods
 """
-struct Parser{Out, Fn<:Function} <: Function
+struct Parser{Out,Fn<:Function} <: Function
   fn::Fn
 end
 
-Parser{Out}(fn) where {Out} = Parser{Out, typeof(fn)}(fn)
+Parser{Out}(fn) where {Out} = Parser{Out,typeof(fn)}(fn)
 
 function Parser(fn, ::Type{Out}) where {Out}
-  Parser{Out, typeof(fn)}(fn)
+  Parser{Out,typeof(fn)}(fn)
 end
 
 # HOX FIXME tää on se vanha malli missä parserin inputti oli aina vaan bittejä
@@ -43,7 +43,7 @@ function (p::Parser{Nothing})(inp::EductionOrArray)
 end
 
 
-function ((p::Parser{T})(inp::EductionOrArray)::Tuple{EductionOrArray,EductionOrArray{T},Bool}) where T
+function ((p::Parser{T})(inp::EductionOrArray)::Tuple{EductionOrArray,EductionOrArray{T},Bool}) where {T}
   # HOX: jotkut parserifunkkarit ei palauta ok:ta, koska ne ei koskaan failaa
   (input_left, output, maybe_ok...) = inp |> p.fn
   input_left, output, get_or_else(maybe_ok, true)
@@ -161,13 +161,11 @@ xf_printer(label) =
 @inline function genome_parser(::Type{ParseUInt{NCodons}}) where {NCodons}
   Parser(UInt) do inp
     (
-      inp |> Drop(NCodons), 
-      
-      inp |> 
-      Take(NCodons) |>
-      Cat() |>
-      Musica.LiftToArray() |>
-      Map(undigits)
+      inp |> Drop(NCodons), inp |>
+                            Take(NCodons) |>
+                            Cat() |>
+                            Musica.LiftToArray() |>
+                            Map(undigits)
     )
   end
 end
@@ -180,7 +178,7 @@ end
 
 Return a [`Parser`](@ref) for `type`.
 """
-function parser(::Type{T}) where T
+function parser(::Type{T}) where {T}
   error("No parser registered for ", T)
 end
 
