@@ -394,7 +394,19 @@ end
 #   print(io, "Or{", PA, ",", PB, "} <: Parser{$(O)}")
 # end
 
-# käy läpi thunkkeja kunnes joku niistä palauttaa Success
+# _any käy läpi thunkkeja kunnes joku niistä palauttaa Success.
+# res oli thunk. Palautetaan thunk, jossa se resolvataan
+_any(p1::Function, ps::Function...) = () -> _any(p1(), ps...)
+# res oli Failure, kokeillaan loppuja thunkkeja
+_any(res::Failure, ps::Function...) = () -> _any(ps...)
+
+# res oli Success -> katkastaan "ketju" ja palautetaan resultti
+_any(res::Success, @nospecialize(ps...)) = res
+
+# loppu thunkit kesken -> fail
+_any() = Failure()
+
+#= # käy läpi thunkkeja kunnes joku niistä palauttaa Success
 function _any(p1, ps...)
   res = p1()
 
@@ -409,9 +421,8 @@ function _any(p1, ps...)
     () -> _any(ps...)
   end
 end
+ =#
 
-# loppu thunkit kesken -> fail
-_any() = Failure()
 
 function (o::Or)(inp::State)
   _any(@>(o.pa(inp)), @>(o.pb(inp)))
@@ -430,20 +441,20 @@ end
 
 # käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten seuraavalle.
 # vrt _first_of, jossa ei tarvii kuljettaa tota resulttia mukana, koska kaikki sille annettavat parserit saa saman inputin
-function _all_of(curr_res::Success, p::Parser, ps::Parser...)
-  _all_of(p(curr_res.state), ps...)
+function _all(curr_res::Success, p::Parser, ps::Parser...)
+  _all(p(curr_res.state), ps...)
 end
 
 #jos eka arg on thunk, palauta thunk jossa kutsutaan _all_of resolvatulla arvolla
-_all_of(s_thunk::Function, ps...) = () -> _all_of(s_thunk(), ps...)
+_all(s_thunk::Function, ps...) = () -> _all(s_thunk(), ps...)
 # ketjun viimeinen Success -> koko paska menee läpi
-_all_of(s::Success) = s
+_all(s::Success) = s
 # Failure missä tahansa kohtaa ketjua -> fail
-_all_of(::Failure, @nospecialize(ps...)) = Failure()
+_all(::Failure, @nospecialize(ps...)) = Failure()
 
 
 function (a::And)(inp::State)
-  _all_of(Success(inp), a.pa, a.pb)
+  _all(Success(inp), a.pa, a.pb)
 end
 
 _execute(res::Function) = _execute(res())
@@ -496,6 +507,7 @@ _first_output_type(p::Parser) = _first_output_type(typeof(p))
     @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Failure()
   end
 
+  # execute joka ei vaadi State:a
   @test Parsing.execute(Parsing.Or(p1, p2), inp) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
 end
 
@@ -515,6 +527,7 @@ end
     # end
   end
 
+  # execute joka ei vaadi State:a
   @test Parsing.execute(Parsing.And(p1,p2), inp) == Success(State((Bool[1, 1], Bool[0, 0]), Any[])) 
 
   let s = State(Bool[], Bool[1, 1, 1, 0])
