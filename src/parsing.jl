@@ -289,7 +289,7 @@ end
 
 function Base.show(io::IO, ::Type{State{O,I,OT,IT}}) where {O,I,OT,IT}
   # print(io, "State{",O,",",I,",",OT,",",IT,"}")
-  
+
   print(io, "State{", O)
   if !(OT <: O)
     print(io, "=", OT)
@@ -302,17 +302,17 @@ function Base.show(io::IO, ::Type{State{O,I,OT,IT}}) where {O,I,OT,IT}
   print(io, "}")
 end
 
-function _concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,Nothing,IT}}
+function concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,Nothing,IT}}
   State{O,I,typeof(o),typeof(inp)}(o, inp)
 end
 
-function _concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,<:Tuple,IT}}
+function concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,<:Tuple,IT}}
   new_output = (s.output..., o)
   OT = typeof(new_output)
   State{OT,I,OT,typeof(inp)}(new_output, inp)
 end
 
-function _concat_output(s::S, o, inp) where {O,I,OT,IT,S<:State{O,I,OT,IT}}
+function concat_output(s::S, o, inp) where {O,I,OT,IT,S<:State{O,I,OT,IT}}
   new_output = (s.output, o)
   _OT = typeof(new_output)
   State{_OT,I,_OT,typeof(inp)}(new_output, inp)
@@ -342,7 +342,7 @@ function Base.show(io::IO, s::Success)
 end
 
 function Base.show(io::IO, ::Type{Success{S}}) where {S<:State}
-  print(io, "Success{",S,"}")
+  print(io, "Success{", S, "}")
 end
 
 struct Failure <: Result end
@@ -375,7 +375,7 @@ function (e::Exact)(state::S) where {O,R,S<:State{O,R}}
   inp_rest = state.remaining_input |> Drop(pat_len)
   got::R = state.remaining_input |> Take(pat_len) |> collect
   if got == e.pattern
-    Success(_concat_output(state, e.pattern, inp_rest))
+    Success(concat_output(state, e.pattern, inp_rest))
   else
     Failure()
   end
@@ -401,7 +401,7 @@ end
 # res oli thunk. Palautetaan thunk, jossa se resolvataan
 _any(p1::Function, ps::Function...) = () -> _any(p1(), ps...)
 # res oli Failure, kokeillaan loppuja thunkkeja
-_any(res::Failure, ps::Function...) = () -> _any(ps...)
+_any(::Failure, ps::Function...) = () -> _any(ps...)
 
 # res oli Success -> katkastaan "ketju" ja palautetaan resultti
 _any(res::Success, @nospecialize(ps...)) = res
@@ -427,8 +427,8 @@ end
  =#
 
 
-function (o::Or)(inp::State)
-  _any(@>(o.pa(inp)), @>(o.pb(inp)))
+function (o::Or)(s::State)
+  _any(@>(o.pa(s)), @>(o.pb(s)))
 end
 
 
@@ -438,7 +438,7 @@ struct And{A,B,PA<:Parser{A},PB<:Parser{B}} <: Parser{Tuple{A,B}}
 end
 
 
-function _first_output_type(::Type{<:And{A}}) where {A}
+function first_output_type(::Type{<:And{A}}) where {A}
   A
 end
 
@@ -476,15 +476,23 @@ end
 function execute(p::P, inp::In) where {Out,In,P<:Parser{Out}}
   # HOX: jos vaan käyttää State{Out}, niin esim. execute(And(p1, p2), Bool[1,1,0,0]) antais
   # State:n tyypiksi State{Tuple{A,B}} eikä State{A} niinko pitäisi
-
-  execute(p, State{_first_output_type(P),In}(nothing, inp))
+  s = State{first_output_type(P),In}(nothing, inp)
+  # @info "execute" s typeof(s)
+  execute(p, s)
 end
 
-function _first_output_type(::Type{<:Parser{O}}) where {O}
+function first_output_type(::Type{<:Parser{O}}) where {O}
   O
 end
 
-_first_output_type(p::Parser) = _first_output_type(typeof(p))
+first_output_type(p::Parser) = first_output_type(typeof(p))
+
+
+@inline _bottom_eltype(::Type{T}) where {T} =
+  let ET = eltype(T)
+    ET == T ? ET : _bottom_eltype(ET)
+  end
+
 
 @testitem "Parsing.Or" begin
   inp = Bool[1, 1, 0, 0]
@@ -519,7 +527,8 @@ end
   p2 = Parsing.Exact(Bool[0, 0])
 
   let s = State{Vector{Bool},Vector{Bool}}(nothing, inp)
-    @test Parsing.execute(Parsing.And(p1, p2), s) == Success(State((Bool[1, 1], Bool[0, 0]), Any[])) 
+    @test Parsing.execute(Parsing.And(p1, p2), s) ==
+          Success(State((Bool[1, 1], Bool[0, 0]), Any[]))
     # @test begin
     #   out = Parsing.execute(Parsing.And(p1, p2), s)
     #   !(out isa Parsing.Success) && error("unexpected failure")
@@ -528,13 +537,13 @@ end
   end
 
   # execute joka ei vaadi State:a
-  @test Parsing.execute(Parsing.And(p1,p2), inp) == Success(State((Bool[1, 1], Bool[0, 0]), Any[])) 
+  @test Parsing.execute(Parsing.And(p1, p2), inp) == Success(State((Bool[1, 1], Bool[0, 0]), Any[]))
 
   let s = State(Bool[], Bool[1, 1, 1, 0])
     @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Failure()
   end
 
-  @test Parsing._first_output_type(Parsing.And(p1, p2)) == Vector{Bool}
+  @test Parsing.first_output_type(Parsing.And(p1, p2)) == Vector{Bool}
 
 end
 
