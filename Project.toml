@@ -3,6 +3,7 @@ uuid = "b7355d43-d5bc-4bd6-b9cb-a8ac25e01657"
 version = "0.0.1"
 
 [deps]
+Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
 AutoHashEqualsCached = "887ad303-ad3a-4bc5-965e-507c643d6945"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 ComputedFieldTypes = "459fdd68-db75-56b8-8c15-d717a790f88e"
