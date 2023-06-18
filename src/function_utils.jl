@@ -52,6 +52,8 @@ struct BoundCall{InitArgPos<:ArgPos,InitArg,F<:Function,KW} <: Function
   BoundCall{InitArgPos}(f::F, x...; kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
 end
 
+# TODO FIXME: Base.show BoundCall sekä tyypille että valuelle. Nää tyypit rupee muuten oleen aika villejä: Union{Musica.Parsing.var"#2#4"{Tuple{Musica.BoundCall{Val{:BindHead}, State{Vector{Bool}=Nothing,Vector{Bool}}, Exact{Vector{Bool}}, Base.Pairs{Symbol, Union{}, Tuple{}, NamedTuple{(), Tuple{}}}}}}, 
+
 const BoundCallWTuple{InitArgPos} = BoundCall{InitArgPos,InitArg} where {InitArg<:Tuple}
 
 @inline (f::BoundCall{ArgHead})(y; kw...) = f.f(f.arg, y; _merge_nonempty(f.kw, kw)...)
