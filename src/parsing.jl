@@ -266,7 +266,23 @@ function Base.show(io::IO, s::State)
   print(io, ")")
 end
 
-function Base.show(io::IO, ::Type{<:State{O,I,OT,IT}}) where {O,I,OT,IT}
+### FIXME: ei toimi????
+# function Base.show(io::IO, ::Type{<:State{O,I,OT,IT}}) where {O,I,OT,IT}
+#   print(io, "State{", O)
+#   if !(OT <: O)
+#     print(io, "=", OT)
+#   end
+#   print(io, ",", I)
+#   if !(IT <: I)
+#     it_short_name = IT <: Transducers.Eduction ? "Eduction" : string(IT)
+#     print(io, "=", it_short_name)
+#   end
+#   print(io, "}")
+# end
+
+function Base.show(io::IO, ::Type{State{O,I,OT,IT}}) where {O,I,OT,IT}
+  # print(io, "State{",O,",",I,",",OT,",",IT,"}")
+  
   print(io, "State{", O)
   if !(OT <: O)
     print(io, "=", OT)
@@ -279,15 +295,20 @@ function Base.show(io::IO, ::Type{<:State{O,I,OT,IT}}) where {O,I,OT,IT}
   print(io, "}")
 end
 
-function _concat_output(s::S, o, inp) where {O,I,S<:State{O,I,Nothing}}
-  State{O,I}(o, inp)
+function _concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,Nothing,IT}}
+  State{O,I,typeof(o),typeof(inp)}(o, inp)
 end
 
-function _concat_output(s::S, o::NewO, inp) where {O,I,S<:State{O,I,<:Tuple},NewO}
-  # @show s
-  # @show typeof(s)
-  # error("FUCK")
-  State{Tuple{O,NewO},I}((s.output..., o), inp)
+function _concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,<:Tuple,IT}}
+  new_output = (s.output..., o)
+  OT = typeof(new_output)
+  State{OT,I,OT,typeof(inp)}(new_output, inp)
+end
+
+function _concat_output(s::S, o, inp) where {O,I,OT,IT,S<:State{O,I,OT,IT}}
+  new_output = (s.output, o)
+  _OT = typeof(new_output)
+  State{_OT,I,_OT,typeof(inp)}(new_output, inp)
 end
 
 # function _concat_output(s::State, o, inp)
@@ -312,6 +333,10 @@ function Base.show(io::IO, s::Success)
   print(io, "Success(")
   show(io, s.state)
   print(io, ")")
+end
+
+function Base.show(io::IO, ::Type{Success{S}}) where {S<:State}
+  print(io, "Success{",S,"}")
 end
 
 struct Failure <: Result end
@@ -362,9 +387,9 @@ function Or(pa::PA, pb::PB) where {A,B,PA<:Parser{A},PB<:Parser{B}}
   Or{Base.promote_type(A, B),PA,PB}(pa, pb)
 end
 
-function Base.show(io::IO, T::Type{<:Or{O, PA,PB}}) where {O,PA,PB}
-  print(io, "Or{", PA, ",", PB, "} <: Parser{$(O)}")
-end
+# function Base.show(io::IO, T::Type{<:Or{O, PA,PB}}) where {O,PA,PB}
+#   print(io, "Or{", PA, ",", PB, "} <: Parser{$(O)}")
+# end
 
 # käy läpi thunkkeja kunnes joku niistä palauttaa Success
 function _any(p1, ps...)
@@ -418,29 +443,30 @@ function (a::And)(inp::State)
   _all_of(Success(inp), a.pa, a.pb)
 end
 
-
+_execute(res::Function) = _execute(res())
+_execute(res) = res
 
 function execute(p::Parser, s::State)
-  res = p(s)
-  while res isa Function
-    res = res()
-  end
-  res
+  _execute(p(s))
+  # res = p(s)
+  # while res isa Function
+  #   res = res()
+  # end
+  # res
 end
 
-function execute(p::Parser{Out}, inp) where {Out}
-  execute(p, State{Out}(nothing, inp))
+function execute(p::Parser{Out}, inp::In) where {Out,In}
+  execute(p, State{Out,In}(nothing, inp))
 end
 
 @testitem "Parsing.Or" begin
   p1 = Parsing.Exact(Bool[1, 1])
   p2 = Parsing.Exact(Bool[0, 0])
-  s = Parsing.State{Vector{Int}}(nothing, Bool[1, 1, 0, 0])
-  let s = Parsing.State{Vector{Int}}(nothing, Bool[1, 1, 0, 0])
+  let s = Parsing.State{Vector{Bool},Vector{Bool}}(nothing, Bool[1, 1, 0, 0])
     @test Parsing.execute(Parsing.Or(p1, p2), s) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
   end
 
-  let s = Parsing.State{Vector{Int}}(nothing, Bool[1, 1, 0, 0])
+  let s = Parsing.State{Vector{Bool},Vector{Bool}}(nothing, Bool[1, 1, 0, 0])
     @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
     @test begin
       out = Parsing.execute(Parsing.Or(p2, p1), s)
@@ -461,7 +487,7 @@ end
   p1 = Parsing.Exact(Bool[1, 1])
   p2 = Parsing.Exact(Bool[0, 0])
 
-  let s = Parsing.State(Bool[], Bool[1, 1, 0, 0])
+  let s = Parsing.State{Vector{Bool},Vector{Bool}}(nothing, Bool[1, 1, 0, 0])
     @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Success(Parsing.State([[1, 1], [0, 0]], []))
     # @test begin
     #   out = Parsing.execute(Parsing.And(p1, p2), s)
