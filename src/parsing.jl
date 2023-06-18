@@ -462,8 +462,34 @@ _all(s::Success) = s
 _all(::Failure, @nospecialize(ps...)) = Failure()
 
 
-function (a::And)(inp::State)
-  _all(Success(inp), a.pa, a.pb)
+function (a::And)(s::State)
+  _all(Success(s), a.pa, a.pb)
+end
+
+struct Varints{MaxCodons} <: Parser{UInt} end
+## TODO: ota inputista enintään MaxCodons kodonia niin kauan ku kodonin eka bitti on 1
+
+struct UInts{NCodons} <: Parser{UInt} end
+
+function (::UInts{NCodons})(s::S) where {NCodons,O,I,S<:State{O,I}}
+  inp::Vector{_bottom_eltype(I)} = s.remaining_input |>
+                                   Take(NCodons) |>
+                                   Cat() |>
+                                   collect
+
+  inp_rest = s.remaining_input |> Drop(NCodons)
+  Success(concat_output(s, undigits(inp), inp_rest))
+end
+
+@testitem "Parsing.UInts and Varints" begin
+  using Transducers
+
+  inp = Vector{Bool}[[1, 0, 1, 0], [1, 1, 1, 1], [1, 0, 0, 0], [0, 1, 1, 1]]
+
+  let want = inp[1:3] |> Cat() |> collect |> undigits
+    @test Parsing.execute(Parsing.UInts{3}(), inp) ==
+          Parsing.Success(Parsing.State(want, [[0, 1, 1, 1]]))
+  end
 end
 
 _execute(res::Function) = _execute(res())
