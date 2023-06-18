@@ -7,36 +7,13 @@ struct CANeuron{NStates,Width,Fn} <: Neuron{NStates,Width,Width}
   repeated_ca_fn::Fn
   steps::Int
 
-
-
   function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, steps::Integer) where {NStates,Width}
     @assert steps > 0 "Number of steps must be >0"
     _g = Int(steps)
     fn = repeated(ca, _g)
     new{NStates,Width,typeof(fn)}(ca, fn, _g)
   end
-  
-
-  function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, steps::Integer, ::Type{Val{1}}) where {NStates,Width}
-    @assert steps > 0 "Number of steps must be >0"
-    _g = Int(steps)
-    fn = repeated(ca, _g)
-    new{NStates,Width,Core.Typeof(fn)}(ca, fn, _g)
-  end
-
-  function CANeuron(ca::DiscreteCA{NStates}, steps::Integer, fn::Fn, ::Type{Val{NStates}}, ::Type{Val{Width}}) where {NStates,Width,Fn}
-    new{NStates,Width,Fn}(ca, fn, Int(steps))
-  end
-
-
 end
-
-function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, steps::Integer, ::Type{Val{2}}) where {NStates,Width}
-  @assert steps > 0 "Number of steps must be >0"
-  CANeuron(ca, steps, repeated(ca, steps), Val{NStates}, Val{Width})
-  # new{NStates,Width,Core.Typeof(fn)}(ca, fn, _g)
-end
-
 
 @inline function Base.hash(a::CANeuron{N,W}, h::UInt) where {N,W}
   hash(:CANeuron, h) |> @>(hash(N)) |> @>(hash(W)) |> @>(hash(a.ca)) |> @>(hash(a.steps))
