@@ -238,11 +238,15 @@ struct State{Out,In,OT<:Maybe{Out},IT<:Union{In,<:Eduction}}
   remaining_input::IT
 end
 
-
-
 function State{Out,In}(o::Maybe{Out}, inp) where {Out,In}
   State{Out,In,typeof(o),typeof(inp)}(o, inp)
 end
+
+## TODO FIXME: miksi tää ei toimi???? Tulee vaan jotain "no method matching (Musica.Parsing.State" blah
+# function State{Out}(o, inp::In) where {Out,In}
+#   State{Out,In,typeof(o),In}(o, inp)
+# end
+
 
 function collect_remaining_input(s::State{O,I,OT,IT})::I where {O,I,OT,IT<:Eduction}
   s.remaining_input |> collect
