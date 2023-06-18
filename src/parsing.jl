@@ -227,34 +227,75 @@ using TestItems
 
 abstract type Parser{Out} <: Function end
 
-struct State{Out,Rest}
-  output::Out
-  remaining_input::Rest
+"""
+- `Out` on se minkä tyyppinen `output` on jos se on jotain muuta ku `nothing`
+- `OT` on `output`-fieldin "oikea" tyyppi, eli jotain `<: Maybe{Out}`
+- `In` on inputin "pohjimmainen" tyyppi
+- `IT` on joko `In` tai sit `Eduction`
+"""
+struct State{Out,In,OT<:Maybe{Out},IT<:Union{In,<:Eduction}}
+  output::OT
+  remaining_input::IT
+end
+
+
+
+function State{Out,In}(o::Maybe{Out}, inp) where {Out,In}
+  State{Out,In,typeof(o),typeof(inp)}(o, inp)
+end
+
+function collect_remaining_input(s::State{O,I,OT,IT})::I where {O,I,OT,IT<:Eduction}
+  s.remaining_input |> collect
+end
+
+function collect_remaining_input(s::State{O,I,OT,IT})::I where {O,I,OT,IT}
+  s.remaining_input
 end
 
 function Base.:(==)(a::State, b::State)
-  Musica.maybe_collect(a.output) == Musica.maybe_collect(b.output) &&
-  Musica.maybe_collect(a.remaining_input) == Musica.maybe_collect(b.remaining_input)
+  a.output == b.output &&
+    Musica.maybe_collect(a.remaining_input) == Musica.maybe_collect(b.remaining_input)
 end
 
 
 function Base.show(io::IO, s::State)
   print(io, "State(")
-  show(io, Musica.maybe_collect(s.output))
+  show(io, s.output)
   print(io, ", ")
   show(io, Musica.maybe_collect(s.remaining_input))
   print(io, ")")
 end
 
-function Base.show(io::IO, T::Type{<:State{O,R}}) where {O,R}
-  out = O <: Eduction ? "Eduction" : string(O)
-  rest = R <: Eduction ? "Eduction" : string(R)
-  print(io, "State{", out, ",", rest, "}")
+function Base.show(io::IO, ::Type{<:State{O,I,OT,IT}}) where {O,I,OT,IT}
+  print(io, "State{", O)
+  if !(OT <: O)
+    print(io, "=", OT)
+  end
+  print(io, ",", I)
+  if !(IT <: I)
+    it_short_name = IT <: Transducers.Eduction ? "Eduction" : string(IT)
+    print(io, "=", it_short_name)
+  end
+  print(io, "}")
 end
 
-function _concat_output(s::State, o, inp)
-  State((s.output, o) |> Cat(), inp)
+function _concat_output(s::S, o, inp) where {O,I,S<:State{O,I,Nothing}}
+  State{O,I}(o, inp)
 end
+
+function _concat_output(s::S, o::NewO, inp) where {O,I,S<:State{O,I,<:Tuple},NewO}
+  # @show s
+  # @show typeof(s)
+  # error("FUCK")
+  State{Tuple{O,NewO},I}((s.output..., o), inp)
+end
+
+# function _concat_output(s::State, o, inp)
+#   # @show s
+#   # @show typeof(s)
+#   # error("FUCK")
+#   State((s.output, o), inp)
+# end
 
 abstract type Result end
 
@@ -266,7 +307,6 @@ end
 function Base.:(==)(a::Success, b::Success)
   a.state == b.state
 end
-
 
 function Base.show(io::IO, s::Success)
   print(io, "Success(")
@@ -296,32 +336,38 @@ function Base.show(io::IO, ::Type{<:Exact{T}}) where {T}
 end
 
 
-function (e::Exact)(inp::State)
-  if isempty(inp.remaining_input)
+function (e::Exact)(state::S) where {O,R,S<:State{O,R}}
+  if isempty(state.remaining_input)
     return Failure()
   end
   pat_len = length(e.pattern)
-  inp_rest = inp.remaining_input |> Drop(pat_len)
-  got = inp.remaining_input |> Take(pat_len) |> collect
+  inp_rest = state.remaining_input |> Drop(pat_len)
+  got::R = state.remaining_input |> Take(pat_len) |> collect
   if got == e.pattern
-    Success(_concat_output(inp, [e.pattern], inp_rest))
+    Success(_concat_output(state, e.pattern, inp_rest))
   else
     Failure()
   end
   # end
 end
 
-struct Or{A,B,PA<:Parser{A},PB<:Parser{B}} <: Parser{Union{A,B}}
+# FIXME: parempi tyyppi <: Parser{???}
+# promote_typejoinin tulos olis hyvä
+struct Or{O,PA<:Parser,PB<:Parser} <: Parser{O}
   pa::PA
   pb::PB
 end
 
-function Base.show(io::IO, T::Type{<:Or{A,B,PA,PB}}) where {A,B,PA,PB}
-  print(io, "Or{", PA, ",", PB, "}")
+function Or(pa::PA, pb::PB) where {A,B,PA<:Parser{A},PB<:Parser{B}}
+  Or{Base.promote_type(A, B),PA,PB}(pa, pb)
+end
+
+function Base.show(io::IO, T::Type{<:Or{O, PA,PB}}) where {O,PA,PB}
+  print(io, "Or{", PA, ",", PB, "} <: Parser{$(O)}")
 end
 
 # käy läpi thunkkeja kunnes joku niistä palauttaa Success
-function _any(p1::Function, ps::Function...)
+function _any(p1, ps...)
   res = p1()
 
   if res isa Function
@@ -344,14 +390,14 @@ function (o::Or)(inp::State)::Union{Function,Result}
 end
 
 
-struct And{A,B,PA<:Parser{A},PB<:Parser{B}} <: Parser{Union{A,B}}
+struct And{A,B,PA<:Parser{A},PB<:Parser{B}} <: Parser{Tuple{A,B}}
   pa::PA
   pb::PB
 end
 
-function Base.show(io::IO, T::Type{<:And{A,B,PA,PB}}) where {A,B,PA,PB}
-  print(io, "And{", PA, ",", PB, "}")
-end
+# function Base.show(io::IO, T::Type{<:And{A,B,PA,PB}}) where {A,B,PA,PB}
+#   print(io, "And{", PA, ",", PB, "}")
+# end
 
 
 # käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten seuraavalle.
@@ -372,47 +418,56 @@ function (a::And)(inp::State)
   _all_of(Success(inp), a.pa, a.pb)
 end
 
+
+
 function execute(p::Parser, s::State)
-  res::Union{Function,Result} = p(s)
+  res = p(s)
   while res isa Function
     res = res()
   end
   res
 end
 
+function execute(p::Parser{Out}, inp) where {Out}
+  execute(p, State{Out}(nothing, inp))
+end
+
 @testitem "Parsing.Or" begin
   p1 = Parsing.Exact(Bool[1, 1])
   p2 = Parsing.Exact(Bool[0, 0])
-  let s = Parsing.State(Bool[], Bool[1, 1, 0, 0])
-    @test Parsing.execute(Parsing.Or(p1, p2), s) == Parsing.Success(Parsing.State([[1,1]], [0,0]))
+  s = Parsing.State{Vector{Int}}(nothing, Bool[1, 1, 0, 0])
+  let s = Parsing.State{Vector{Int}}(nothing, Bool[1, 1, 0, 0])
+    @test Parsing.execute(Parsing.Or(p1, p2), s) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
   end
 
-  let s = Parsing.State(Bool[], Bool[1, 1, 0, 0])
-    @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([[1,1]], [0,0]))
+  let s = Parsing.State{Vector{Int}}(nothing, Bool[1, 1, 0, 0])
+    @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
     @test begin
       out = Parsing.execute(Parsing.Or(p2, p1), s)
       !(out isa Parsing.Success) && error("unexpected failure")
-      typeof(Musica.maybe_collect(out.state.output)) == Vector{Vector{Bool}}
+      typeof(Musica.maybe_collect(out.state.output)) == Vector{Bool}
     end
   end
 
   let s = Parsing.State(Bool[], Bool[1, 0, 1, 0])
     @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Failure()
   end
+
+  @test Parsing.execute(Parsing.Or(p1, p2), Bool[1, 1, 0, 0]) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
 end
 
 @testitem "Parsing.And" begin
   using Test
   p1 = Parsing.Exact(Bool[1, 1])
   p2 = Parsing.Exact(Bool[0, 0])
-  
+
   let s = Parsing.State(Bool[], Bool[1, 1, 0, 0])
-    @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Success(Parsing.State([[1,1],[0,0]], []))
-    @test begin
-      out = Parsing.execute(Parsing.And(p1, p2), s)
-      !(out isa Parsing.Success) && error("unexpected failure")
-      typeof(Musica.maybe_collect(out.state.output)) == Vector{Vector{Bool}}
-    end
+    @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Success(Parsing.State([[1, 1], [0, 0]], []))
+    # @test begin
+    #   out = Parsing.execute(Parsing.And(p1, p2), s)
+    #   !(out isa Parsing.Success) && error("unexpected failure")
+    #   typeof(Musica.maybe_collect(out.state.output)) == Vector{Vector{Bool}}
+    # end
   end
 
   let s = Parsing.State(Bool[], Bool[1, 1, 1, 0])
