@@ -2,7 +2,20 @@ using Transducers, TestItems
 using Transducers: start, inner, @next, wrap, unwrap, complete, Eduction
 using AutoHashEqualsCached
 
-const Maybe{T} = Union{Some{T},Nothing, T}
+struct TNothing{T} end
+
+const Nothingness{T} = Union{Nothing,TNothing{T}}
+
+## HOX FIXME: tyypittämätön nothing on vähän hankala. Esim sen takia jouduin Parsing.State:een
+## heittämään erillisen Out ja OT -tyypin: struct State{Out,In,OT<:Maybe{Out},IT<:Union{In,<:Eduction}}
+const Maybe{T} = Union{Some{T},T,Nothingness{T}}
+
+@inline Base.isnothing(@nospecialize(::TNothing)) = true
+
+tnothing(::Type{T}) where {T} = TNothing{T}()
+tnothing(v) = tnothing(typeof(v))
+
+export TNothing, Nothingness, tnothing
 
 # HOX: Base.convert(::Type{Maybe{T}} […]) määritteleminen saa parhaillaan jopa kääntäjän nurin
 
@@ -41,6 +54,7 @@ export Maybe, Something
 
 @inline get_or_else(::Tuple{}, fallback::T) where {T} = fallback
 @inline get_or_else(::Nothing, fallback::T) where {T} = fallback
+@inline get_or_else(::TNothing{T}, fallback::T) where {T} = fallback
 # HUOM: @nospecialize(_fallback) koska sitä arvoa ei koskaan käytetä, niin turha kääntää sen eri 
 # tyypeille versioita
 @inline get_or_else(v::T, @nospecialize(_fallback)) where {T} = @inline get_value(v)
@@ -50,11 +64,27 @@ export Maybe, Something
 function get_value end
 
 @inline get_value() = throw(ArgumentError("No value arguments present"))
-@inline get_value(x::Nothing, y...) = get_value(y...)
+# @inline get_value(x::TNothing, y...) = get_value(y...)
+@inline get_value(x::Nothingness, y...) = get_value(y...)
 @inline get_value(x::Tuple{}, y...) = get_value(y...)
 @inline get_value(x::Some, @nospecialize(y...)) = x.value
 @inline get_value((x,)::NTuple{1}, @nospecialize(y...)) = x
 @inline get_value(x::Any, @nospecialize(y...)) = x
+
+export get_value
+
+@testitem "get_value" begin
+  for nope = (:nothing, :(tnothing(Int)), :(()))
+    @eval @test get_value($nope, 5) == 5
+  end
+
+  for yup = (:(Some(5)), :(5,), :5), nope = (:nothing, :(tnothing(Int)), :(()))
+    @info "get_value test" yup nope
+    @eval @test get_value($yup, $nope) == 5
+  end
+  # @test get_value(tnothing(Int), 5) == 5
+  # @test get_value(nothing, 5) == 5
+end
 
 # map(f, x::Number, ys::Number...) = f(x, ys...)
 # TODO: map(f, x::Maybe{T}, ys::Maybe{T}...) niin että kaikki x, ys... pitää olla Some
@@ -73,7 +103,7 @@ julia> map(x->2x, nothing)
 
 ```
 """
-@inline Base.map(f, ::Nothing) = nothing
+@inline Base.map(f, @nospecialize(::_Nothing)) = nothing
 
 @testitem "Maybe" begin
   using Random
