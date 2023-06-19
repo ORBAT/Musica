@@ -48,10 +48,13 @@ struct BoundCall{InitArgPos<:ArgPos,InitArg,F<:Function,KW} <: Function
   arg::InitArg
   kw::KW
 
-  BoundCall{InitArgPos}(f::F, x...; kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs)
+  ######## WIP TODO
+  _str::Maybe{String}
+
+  BoundCall{InitArgPos}(f::F, x...; __boundcall_str__::Maybe{String}=nothing, kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs, __boundcall_str__)
 end
   
-# TODO FIXME: Base.show BoundCall sekä tyypille että valuelle. Nää tyypit rupee muuten oleen aika villejä: Union{Musica.Parsing.var"#2#4"{Tuple{Musica.BoundCall{Val{:BindHead}, State{Vector{Bool}=Nothing,Vector{Bool}}, Exact{Vector{Bool}}, Base.Pairs{Symbol, Union{}, Tuple{}, NamedTuple{(), Tuple{}}}}}}, 
+# TODO FIXME: Base.show BoundCallin valuelle
 
 const BoundCallWTuple{InitArgPos} = BoundCall{InitArgPos,InitArg} where {InitArg<:Tuple}
 
@@ -221,7 +224,7 @@ function _bound(ex, argpos)
   isnothing(kws) ? kws = Any[] : kws = map(esc, kws)
 
   quote
-    Musica.BoundCall{Val{$(QuoteNode(argpos))}}($fn, $(args...); $(kws...))
+    Musica.BoundCall{Val{$(QuoteNode(argpos))}}($fn, $(args...);__boundcall_str__=$(string(ex))  $(kws...))
   end
 end
 

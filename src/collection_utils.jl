@@ -20,6 +20,7 @@ tnothing(v) = tnothing(typeof(v))
 export TNothing, Nothingness, tnothing
 
 # HOX: Base.convert(::Type{Maybe{T}} […]) määritteleminen saa parhaillaan jopa kääntäjän nurin
+#### ----> koska type piracy, ks esim https://github.com/JuliaLang/julia/issues/30805
 
 @inline Base.convert(::Type{Some{T}}, x::T) where {T} = Some(x)
 @inline Base.convert(::Type{T}, x::Some{T}) where {T} = get_value(x)

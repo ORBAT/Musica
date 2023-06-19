@@ -284,6 +284,14 @@ function Base.show(io::IO, s::State)
   print(io, ")")
 end
 
+
+### HOX: Base.show -metodi ::Type:lle on tyyppipiratismia ja aiheuttaa ilmeisesti ihan vitusti ongelmia.
+# https://discourse.julialang.org/t/weird-error-after-defining-base-show-method-for-custom-datatype/83562
+# https://github.com/PainterQubits/Unitful.jl/issues/321
+# https://discourse.julialang.org/t/broken-base-show-method/48453
+# https://github.com/JuliaLang/julia/issues/35643
+
+#= 
 function Base.show(io::IO, ::Type{State{O,I,OT,IT}}) where {O,I,OT,IT}
   # print(io, "State{",O,",",I,",",OT,",",IT,"}")
 
@@ -299,7 +307,7 @@ function Base.show(io::IO, ::Type{State{O,I,OT,IT}}) where {O,I,OT,IT}
   print(io, "}")
 end
 
-
+ =#
 #### TODO HOX: TNothing käyttäminen näin tai sit <:Nothingness tmv vetää
 #### kääntäjän ikuiseen luuppiin jostain syystä
 # function concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,TNothing{O},IT}}
@@ -345,10 +353,6 @@ function Base.show(io::IO, s::Success)
   print(io, ")")
 end
 
-function Base.show(io::IO, ::Type{Success{S}}) where {S<:State}
-  print(io, "Success{", S, "}")
-end
-
 struct Failure <: Result end
 
 #=
@@ -365,11 +369,6 @@ TODO: parseri / matcheri joka vaatii jonkun tarkan patternin, mutta ei lisää m
 struct Exact{T<:AbstractVector} <: Parser{T}
   pattern::T
 end
-
-function Base.show(io::IO, ::Type{<:Exact{T}}) where {T}
-  print(io, "Exact{", T, "}")
-end
-
 
 function (e::Exact)(state::S) where {O,R,S<:State{O,R}}
   if isempty(state.remaining_input)
@@ -396,10 +395,6 @@ end
 function Or(pa::PA, pb::PB) where {A,B,PA<:Parser{A},PB<:Parser{B}}
   Or{Base.promote_type(A, B),PA,PB}(pa, pb)
 end
-
-# function Base.show(io::IO, T::Type{<:Or{O, PA,PB}}) where {O,PA,PB}
-#   print(io, "Or{", PA, ",", PB, "} <: Parser{$(O)}")
-# end
 
 # _any käy läpi thunkkeja kunnes joku niistä palauttaa Success.
 # res oli thunk. Palautetaan thunk, jossa se resolvataan
@@ -445,12 +440,6 @@ end
 function first_output_type(::Type{<:And{A}}) where {A}
   A
 end
-
-
-# function Base.show(io::IO, T::Type{<:And{A,B,PA,PB}}) where {A,B,PA,PB}
-#   print(io, "And{", PA, ",", PB, "}")
-# end
-
 
 # käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten seuraavalle.
 # vrt _first_of, jossa ei tarvii kuljettaa tota resulttia mukana, koska kaikki sille annettavat parserit saa saman inputin
