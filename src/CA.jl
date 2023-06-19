@@ -265,7 +265,7 @@ julia> undigits([])
 0x0000000000000000
 ```
 """
-Base.@assume_effects :foldable function undigits(d::Union{AbstractArray,Tuple}, base=2)
+function undigits(d::Union{AbstractArray,Tuple}, base=2)
   let d_len = length(d)
     if d_len == 0
       return UInt(0)
@@ -287,6 +287,8 @@ end
   @test undigits([0, 1, 1, 1, 1, 0, 0, 0]) == 0x000000000000001e
   @test_throws AssertionError undigits(ones(Bool, 65))
   @test_throws AssertionError undigits(ones(Int, 41), 3)
+  ## HOX: Base.@assume_effects :foldable oli mahdollisesti siis paska idea, tosin tiedä miten hyvä toi inferenssi on
+  # @test Base.infer_effects(undigits, (Vector{Int},)) |> Core.Compiler.is_foldable
 end
 
 # undigits(d, base=2) = foldr((digit, acc) -> muladd(base, acc, digit), d, init=UInt(0))
@@ -360,7 +362,7 @@ julia> show(x)
 
 See also [`undigits`](@ref)
 """
-@inline Base.@assume_effects :foldable function rule_to_rule_lookup(rule::Integer, nstates::Int=2, radius::Int=1)
+@inline function rule_to_rule_lookup(rule::Integer, nstates::Int=2, radius::Int=1)
   RuleLen = nstates^(2 * radius + 1)
   # FIXME: tän tyypin pitäis sopia yhteen NStates:in kanssa.
   # et jos NS=2 niin vois olla SVector{RuleLen,Bool}
@@ -417,7 +419,7 @@ export num_to_row
   @test_throws AssertionError num_to_ones(256, Val{8})
 end
 
-@inline Base.@assume_effects :foldable num_from_gray(n) = UInt(Integer(reinterpret(Gray64, n)))
+@inline num_from_gray(n) = UInt(Integer(reinterpret(Gray64, n)))
 
 export num_from_gray
 
@@ -433,7 +435,7 @@ Interpret a `Row` as being a Gray-coded integer
 
 export row_from_gray
 
-@inline Base.@assume_effects :foldable num_to_gray(x) = (x ⊻ (x >> 1))
+@inline num_to_gray(x) = (x ⊻ (x >> 1))
 
 export num_to_gray
 
