@@ -46,15 +46,37 @@ struct BoundCall{InitArgPos<:ArgPos,InitArg,F<:Function,KW} <: Function
   arg::InitArg
   kw::KW
 
-  ######## WIP TODO
-  _str::Maybe{String}
+  _str::String
 
-  BoundCall{InitArgPos}(f::F, x...; __boundcall_str__::Maybe{String}=nothing, kwargs...) where {InitArgPos,F} = new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs, __boundcall_str__)
+  function BoundCall{InitArgPos}(f::F, _str::String, x; kwargs...) where {InitArgPos,F}
+    new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs, _str)
+  end
+
+  function BoundCall{InitArgPos}(f::F, _str::String, x...; kwargs...) where {InitArgPos,F}
+    new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs, _str)
+  end
 end
-  
-# TODO FIXME: Base.show BoundCallin valuelle
+
+@inline _stringify_argpos(::Type{ArgHead}) = ":ArgHead"
+@inline _stringify_argpos(::Type{ArgTail}) = ":ArgTail"
+
+
+Base.show(io::IO, b::BoundCall) = print(io, b._str)
+Base.show(io::IO, ::MIME"text/plain", b::BoundCall{AP}) where {AP} = print(io,
+  "BoundCall{",
+  _stringify_argpos(AP), "}(",
+  b._str, ")")
 
 const BoundCallWTuple{InitArgPos} = BoundCall{InitArgPos,InitArg} where {InitArg<:Tuple}
+
+const _EmptyKW = Base.Pairs{Symbol,Union{},Tuple{},NamedTuple{(),Tuple{}}}
+const _emptyKW = pairs((;))
+
+"Only call `merge` if both parameters are non-empty, otherwise just return the non-empty param"
+@inline _merge_nonempty(d, other) = merge(d, other)
+@inline _merge_nonempty(d, ::_EmptyKW) = d
+@inline _merge_nonempty(::_EmptyKW, d) = d
+@inline _merge_nonempty(::_EmptyKW, ::_EmptyKW) = _emptyKW
 
 @inline (f::BoundCall{ArgHead})(y; kw...) = f.f(f.arg, y; _merge_nonempty(f.kw, kw)...)
 @inline (f::BoundCall{ArgHead})(ys...; kw...) = f.f(f.arg, ys...; _merge_nonempty(f.kw, kw)...)
@@ -71,32 +93,32 @@ const BoundCallWTuple{InitArgPos} = BoundCall{InitArgPos,InitArg} where {InitArg
   using Musica: BoundCall, ArgHead, ArgTail
   fn(a, b; c=3, d) = a / (b - c)d
 
-  let bfn = BoundCall{ArgHead}(fn, 1)
+  let bfn = BoundCall{ArgHead}(fn,"fn", 1)
     @test bfn(2; d=4) == fn(1, 2; d=4)
     @test bfn(2; c=30, d=40) == fn(1, 2; c=30, d=40)
   end
 
-  let bfn = BoundCall{ArgHead}(fn, 1, 2)
-    @test bfn(;d=4) == fn(1, 2; d=4)
+  let bfn = BoundCall{ArgHead}(fn, "fn", 1, 2)
+    @test bfn(; d=4) == fn(1, 2; d=4)
     @test bfn(c=30, d=40) == fn(1, 2; c=30, d=40)
   end
 
-  let bfn = BoundCall{ArgHead}(fn)
+  let bfn = BoundCall{ArgHead}(fn, "fn")
     @test bfn(1, 2; d=4) == fn(1, 2; d=4)
     @test bfn(1, 2; c=30, d=40) == fn(1, 2; c=30, d=40)
   end
 
-  let bfn = BoundCall{ArgTail}(fn, 2)
+  let bfn = BoundCall{ArgTail}(fn, "fn", 2)
     @test bfn(1; d=4) == fn(1, 2; d=4)
     @test bfn(1; c=30, d=40) == fn(1, 2; c=30, d=40)
   end
 
-  let bfn = BoundCall{ArgTail}(fn, 1, 2)
+  let bfn = BoundCall{ArgTail}(fn, "fn", 1, 2)
     @test bfn(d=4) == fn(1, 2; d=4)
     @test bfn(c=30, d=40) == fn(1, 2; c=30, d=40)
   end
 
-  let bfn = BoundCall{ArgTail}(fn)
+  let bfn = BoundCall{ArgTail}(fn, "fn")
     @test bfn(1, 2; d=4) == fn(1, 2; d=4)
     @test bfn(1, 2; c=30, d=40) == fn(1, 2; c=30, d=40)
   end
@@ -123,15 +145,6 @@ KYS: miks toi herjaa kun taas `const _BoundCallHeadTup = _BoundCallHead{InitArgs
     Main.Musica.BoundCall{Val{:CurryHead}, InitArgs, F} where {InitArgs<:Tuple, F}
 
 """
-
-const _EmptyKW = Base.Pairs{Symbol,Union{},Tuple{},NamedTuple{(),Tuple{}}}
-const _emptyKW = pairs((;))
-
-"Only call `merge` if both parameters are non-empty, otherwise just return the non-empty param"
-@inline _merge_nonempty(d::AbstractDict, other::AbstractDict) = merge(d, other)
-@inline _merge_nonempty(d::AbstractDict, ::_EmptyKW) = d
-@inline _merge_nonempty(::_EmptyKW, d::AbstractDict) = d
-@inline _merge_nonempty(::_EmptyKW, ::_EmptyKW) = _emptyKW
 
 macro ©(ex)
   _bound(ex, :BindHead)
@@ -209,20 +222,55 @@ macro <(ex)
   _bound(ex, :BindTail)
 end
 
-function _bound(ex, argpos)
-  @capture(ex, fn_(args__; kws__) | fn_(args__)) || error("Not used on a function call? Syntax: @> f(a, b; c = 1)")
-  if length(args) == 0 && length(kws) == 0
-    error("Function call had no regular or keyword arguments. Syntax: @> f(a, b; c = 1)")
+function _stringify_arg(ex::Expr)
+  # jos kw niin erillinen kw-stringify, muuten vaan string(ex)
+  if ex.head === :kw
+    string(ex.args[1]) * "=" * string(ex.args[2])
+  else
+    string(ex)
   end
+end
+
+_stringify_arg(x) = string(x)
+
+_stringify_args(::Nothing) = ""
+_stringify_args(args) = join(map(_stringify_arg, args), ",")
+_stringify_kws(kws) = ";" * _stringify_args(kws)
+_stringify_kws(::Nothing) = ""
+
+
+_stringify_unbound_param(::Type{ArgHead}, ::Nothing) = "_xs..."
+_stringify_unbound_param(::Type{ArgHead}, @nospecialize(args)) = ",_xs..."
+_stringify_unbound_param(::Type{ArgTail}, ::Nothing) = "_xs..."
+_stringify_unbound_param(::Type{ArgTail}, @nospecialize(args)) = "_xs...,"
+
+_stringify_bound_call(T::Type{ArgHead}, fn, args, kws) = "_xs->" * string(fn) * "(" * _stringify_args(args) * _stringify_unbound_param(T, args) * _stringify_kws(kws) * ")"
+_stringify_bound_call(T::Type{ArgTail}, fn, args, kws) = "_xs->" * string(fn) * "(" * _stringify_unbound_param(T, args) * _stringify_args(args) * _stringify_kws(kws) * ")"
+
+
+function _bound(ex, argpos)
+  function _string_sexpr(ex)
+    io = IOBuffer()
+    Meta.show_sexpr(io, ex)
+    io |> take! |> String
+  end
+  @capture(ex, fn_(args__; kws__) | fn_(args__)) || error("Not used on a function call? Syntax: @> f(a, b; c = 1)")
+
+  # @debug "bound" ex _string_sexpr(ex) args kws
+
+  # if length(args) == 0 && length(kws) == 0
+  #   error("Function call had no regular or keyword arguments. Syntax: @> f(a, b; c = 1)")
+  # end
 
   # @debug fn args kws
-
+  ex_str = _stringify_bound_call(Val{argpos}, fn, args, kws)
   fn = esc(fn)
-  args = map(esc, args)
-  isnothing(kws) ? kws = Any[] : kws = map(esc, kws)
+  _args = !isnothing(args) ? map(esc, args) : []
+  _kws = !isnothing(kws) ? map(esc, kws) : []
+  # isnothing(kws) ? kws = Any[] : kws = map(esc, kws)
 
   quote
-    Musica.BoundCall{Val{$(QuoteNode(argpos))}}($fn, $(args...);__boundcall_str__=$(string(ex))  $(kws...))
+    Musica.BoundCall{Val{$(QuoteNode(argpos))}}($fn, $(ex_str), $(_args...), $(_kws...))
   end
 end
 
@@ -256,7 +304,7 @@ end
 
     @test @<(ZeroPadded(4))([1,2]).coll == ZeroPadded([1,2], 4).coll =#
 
-  fn(a, b; c) = (a - b)c
+  fn(a, b; c, d=0) = (a - b) * (c + d)
 
   # pelkkä kw arg
   @test @<(fn(; c=5))(12, 2) == 50
@@ -265,6 +313,8 @@ end
   @test @>(fn(; c=5))(12, 2) == 50
 
   @test @>(fn(12))(2; c=5) == 50
+  @test @>(fn(12, c=5))(2) == 50
+  @test @>(fn(12; c=5))(2) == 50
 end
 
 @inline _stable_typeof(x) = typeof(x)
