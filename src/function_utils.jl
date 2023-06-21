@@ -6,26 +6,12 @@ using Transducers, TestItems, Test, MacroTools
 Compose `fn` with itself `times` times
 """
 @inline function repeated(fn, times)::Function
-  # if times == 1
-  #   return fn
-  # end
-  # repeated_fold(fn, times)
-  # HUOM: exec time on reilusti nopeampi repeated_compose:n lopputuloksella, mutta
-  # sen composen kasaaminen (eli repeated_compose(fn,n) kutsu) kestää kauemmin ku mitä
-  # repeated_fold
-
-  repeated_iter(fn, times)
-
-  # if times ≤ 10
-  #   repeated_compose(fn, times)
-  # else
-  #   repeated_iter(fn, times)
-  # end
+  repeated_for(fn, times)
 end
 
 @testitem "repeated" begin
   _fn(x) = 2x
-  @test Musica.repeated_compose(_fn, 5)(5) == Musica.repeated_iter(_fn, 5)(5)
+  @test Musica.repeated_compose(_fn, 5)(5) == Musica.repeated_iter(_fn, 5)(5) == Musica.repeated_for(_fn, 5)(5)
 end
 
 # HUOM: repeated_compose:n palauttama funkkari on reilusti nopeampi ku repeated_fold:in, mutta
@@ -36,6 +22,18 @@ end
 # # this is basically just fn composed with itself `times` times (fn ∘ fn ∘ ... )
 @inline repeated_fold(fn, times) = (input) -> (@inline; foldl((fn ∘ _left), 1:times; init=input))
 @inline repeated_iter(fn, times) = inp -> (@inline; 1:times+1 |> Iterated(fn, inp) |> TakeLast(1) |> collect |> only)
+
+@inline function repeated_for(fn, times)
+  input -> begin
+    @inline
+    let fn = fn, times = times, out = fn(input)
+      for _ in 1:(times-1)
+        out = fn(out)
+      end
+      out
+    end
+  end
+end
 
 @inline _left(a, _) = a
 
