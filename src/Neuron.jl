@@ -3,39 +3,40 @@ using TestItems, Test
 abstract type Neuron{NStates,InWidth,OutWidth} <: Function end
 
 struct CANeuron{NStates,Width,Fn} <: Neuron{NStates,Width,Width}
-  ca::DiscreteCA
-  repeated_ca_fn::Fn
-  steps::Int
+  _ca::DiscreteCA # HOX: abstrakti tyyppi koska UnionAll -->käpistely hidasta. Ei käytetä ku show:ssa tällä hetkellä
+  _repeated_ca_fn::Fn
+  _steps::Int
 
   function CANeuron{NStates,Width}(ca::DiscreteCA{NStates}, steps::Integer) where {NStates,Width}
     @assert steps > 0 "Number of steps must be >0"
     _g = Int(steps)
     fn = repeated(ca, _g)
-    new{NStates,Width,typeof(fn)}(ca, fn, _g)
+    ## HOX: Core.Typeof saattaa ilm Teoriassa Joskus Ehkä olla hyvä idea funktio-valueiden (ja tyyppien) kanssa. Ks Bear
+    new{NStates,Width,Core.Typeof(fn)}(ca, fn, _g)
   end
 end
 
 @inline function Base.hash(a::CANeuron{N,W}, h::UInt) where {N,W}
-  hash(:CANeuron, h) |> @>(hash(N)) |> @>(hash(W)) |> @>(hash(a.ca)) |> @>(hash(a.steps))
+  hash(:CANeuron, h) |> @>(hash(N)) |> @>(hash(W)) |> @>(hash(a._ca)) |> @>(hash(a._steps))
 end
 
 @inline function Base.:(==)(a::CANeuron{N1,W1}, b::CANeuron{N2,W2}) where {N1,W1,N2,W2}
-  isequal(N1, N2) && isequal(W1, W2) && isequal(a.steps, b.steps) && isequal(a.ca, b.ca)
+  isequal(N1, N2) && isequal(W1, W2) && isequal(a._steps, b._steps) && isequal(a._ca, b._ca)
 end
 
 ## 
 
 function Base.show(io::IO, can::CANeuron{NS,Width}) where {NS,Width}
-  print(io, "CANeuron($(can.ca), width=$Width, steps=$(can.steps))")
+  print(io, "CANeuron(", can._ca, ", width=",Width, ", steps=",can._steps, ")")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", can::CANeuron{NS,Width}) where {NS,Width}
-  print(io, "CANeuron($(can.ca), width=$Width, steps=$(can.steps))")
+  print(io, can)
 end
 
 
 @inline function (can::CANeuron{N,W})(state::State)::State where {N,W,State<:Row{N,W}}
-  can.repeated_ca_fn(state)
+  can._repeated_ca_fn(state)
 end
 
 @inline bits_per_steps_default() = 5
