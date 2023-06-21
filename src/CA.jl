@@ -217,7 +217,7 @@ end
 - turns each neighborhood x into a number, uses that to index into the rule_lookup to get the result
 """
 @inline function _transducer(dca::T) where {T<:DiscreteCA}
-  Consecutive(_neighborhood_size(T), 1) |>
+  Consecutive(Val{_neighborhood_size(T)}(), Val{1}()) |>
   Map(@> _lookup_rule(dca))
 end
 
