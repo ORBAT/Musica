@@ -182,11 +182,11 @@ HOX TODO: pitää ehkä tehdä tästä myös mutatoiva versio. CANeuron ja CANeu
   xf = _transducer(dca)
   _ss = similar(state)
   # @info "(dca)(state)" typeof(state) state typeof(_ss) _ss
-  _collect_into!(xf, ws, _ss)
+  _collect_into!(_ss, xf, ws)
 end
 
-"Feeds `foldable` into `xf` and collects the result into `dest`. Mutates `collection`"
-_collect_into!(xf, foldable, dest) =
+"Feeds `foldable` into `xf` and collects the result into `dest`. Mutates `dest`"
+_collect_into!(dest, xf, foldable) =
   foldl(xf |> Enumerate(), foldable; init=dest) do acc, (idx, a)
     # folds xf into collection
     @inbounds acc[idx] = a
