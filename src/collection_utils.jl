@@ -2,7 +2,10 @@ using Transducers, TestItems
 using Transducers: start, inner, @next, wrap, unwrap, complete, Eduction
 using AutoHashEqualsCached
 
-struct TNothing{T} end
+abstract type Optional{T} end
+
+struct TNothing{T} <: Optional{T} end
+
 
 const Nothingness{T} = Union{Nothing,TNothing{T}}
 
@@ -12,10 +15,45 @@ const Nothingness{T} = Union{Nothing,TNothing{T}}
 ## HOX HOX HOX: TNothing ei auta mitään esim Parsing.State(tnothing(UInt64), [[1,1],[0,0]]) koska toi tnothing tietty on tyyppi TNothing{T} eikä T...
 const Maybe{T} = Union{Some{T},T,Nothingness{T}}
 
+struct SSome{T} <: Optional{T}
+  value::T
+end
+
+SSome(::Type{T}) where {T} = SSome{Type{T}}(T)
+
+
+
+@inline Base.promote_rule(::Type{SSome{T}}, ::Type{SSome{S}}) where {T, S<:T} = SSome{T}
+
+@inline Base.convert(::Type{T}, x::SSome{T}) where {T} = get_value(x)
+@inline Base.convert(::Type{Optional{T}}, x::T) where {T} = SSome(x)
+@inline Base.convert(::Type{Optional{T}}, ::Nothing) where {T} = tnothing(T)
+
+@inline Base.convert(::Type{SSome{T}}, x::T) where {T} = SSome(x)
+@inline Base.convert(::Type{SSome{T}}, x::SSome) where {T} = SSome{T}(convert(T, x.value))::SSome{T}
+@inline Base.convert(::Type{TNothing{T}}, @nospecialize(::TNothing)) where {T} = TNothing{T}()
+@inline Base.convert(::Type{Optional{T}}, @nospecialize(::TNothing)) where {T} = TNothing{T}()
+
+function Base.show(io::IO, x::SSome)
+  if get(io, :typeinfo, Any) == typeof(x)
+      show(io, x.value)
+  else
+      print(io, "SSome(")
+      show(io, x.value)
+      print(io, ')')
+  end
+end
+
+
 @inline Base.isnothing(@nospecialize(::TNothing)) = true
+@inline Base.notnothing(@nospecialize(::TNothing)) = throw(ArgumentError("TNothing passed to notnothing"))
+
+@inline Base.something(@nospecialize(::TNothing), y...) = something(y...)
+@inline Base.something(x::SSome, @nospecialize(y...)) = x.value
 
 tnothing(::Type{T}) where {T} = TNothing{T}()
 tnothing(v) = tnothing(typeof(v))
+tnothing() = tnothing(Any)
 
 export TNothing, Nothingness, tnothing
 
@@ -25,14 +63,15 @@ export TNothing, Nothingness, tnothing
 @inline Base.convert(::Type{Some{T}}, x::T) where {T} = Some(x)
 @inline Base.convert(::Type{T}, x::Some{T}) where {T} = get_value(x)
 @inline Base.:(==)(a::Some{T}, b::Some{T}) where {T} = isequal(get_value(a), get_value(b))
+@inline Base.:(==)(a::SSome{T}, b::SSome{T}) where {T} = isequal(get_value(a), get_value(b))
 
-@testitem "Some{T} conversions and equality" begin
-  let a::Some{Int} = 10
-    @test a isa Some{Int}
-    @test a == Some(10)
+@testitem "SSome{T} conversions and equality" begin
+  let a::SSome{Int} = 10
+    @test a isa SSome{Int}
+    @test a == SSome(10)
   end
 
-  let a::Int = Some(10)
+  let a::Int = SSome(10)
     @test a isa Int
     @test a == 10
   end
@@ -46,17 +85,26 @@ export TNothing, Nothingness, tnothing
 
   let bob1 = Bob(), bob2 = deepcopy(bob1)
     @test bob1 == bob2
-    @test Some(bob1) == Some(bob2)
+    @test SSome(bob1) == SSome(bob2)
   end
-  let a = Some(1), b = Some(1)
+  let a = SSome(1), b = SSome(1)
     @test a == b
   end
+
+  struct TakesOpt
+    a::Optional{Int}
+  end
+
+  @test TakesOpt(5).a == SSome(5)
+  @test TakesOpt(nothing).a == tnothing(Int)
+  @test TakesOpt(tnothing(Int)).a == tnothing(Int)
+  @test TakesOpt(tnothing()).a == tnothing(Int)
 end
 
-export Maybe, Something
+export Maybe, Optional, SSome
 
-@inline get_or_else(::Tuple{}, fallback::T) where {T} = fallback
-@inline get_or_else(::Nothing, fallback::T) where {T} = fallback
+@inline get_or_else(::Tuple{}, fallback)  = fallback
+@inline get_or_else(::Nothing, fallback)  = fallback
 @inline get_or_else(::TNothing{T}, fallback::T) where {T} = fallback
 # HUOM: @nospecialize(_fallback) koska sitä arvoa ei koskaan käytetä, niin turha kääntää sen eri 
 # tyypeille versioita
@@ -71,22 +119,34 @@ function get_value end
 @inline get_value(x::Nothingness, y...) = get_value(y...)
 @inline get_value(x::Tuple{}, y...) = get_value(y...)
 @inline get_value(x::Some, @nospecialize(y...)) = x.value
+@inline get_value(x::SSome, @nospecialize(y...)) = x.value
 @inline get_value((x,)::NTuple{1}, @nospecialize(y...)) = x
 @inline get_value(x::Any, @nospecialize(y...)) = x
+@inline get_value(x::Function, y...) = get_value(x(), y...)
 
 export get_value
+
+macro get_value(args...)
+  expr = :(nothing)
+  for arg in reverse(args)
+      expr = :(val = $(esc(arg)); val !== nothing && !(val isa TNothing) ? val : ($expr))
+  end
+  something = GlobalRef(Base, :something)
+  return :($something($expr))
+end
+
 
 @testitem "get_value" begin
   for nope = (:nothing, :(tnothing(Int)), :(()))
     @eval @test get_value($nope, 5) == 5
   end
 
-  for yup = (:(Some(5)), :(5,), :5), nope = (:nothing, :(tnothing(Int)), :(()))
+  for yup = (:(Some(5)), :(SSome(5)), :(5,), :5), nope = (:nothing, :(tnothing(Int)), :(()))
     @info "get_value test" yup nope
     @eval @test get_value($yup, $nope) == 5
   end
-  # @test get_value(tnothing(Int), 5) == 5
-  # @test get_value(nothing, 5) == 5
+  fn = x -> 2x
+  @test get_value(() -> nothing, Some(fn)) == fn
 end
 
 # map(f, x::Number, ys::Number...) = f(x, ys...)
@@ -118,6 +178,20 @@ julia> map(x->2x, nothing)
   @test Musica.get_or_else(Testes(Xoshiro(666)).v, Xoshiro(1)) == Xoshiro(666)
   @test Musica.get_or_else(Testes(nothing).v, Xoshiro(1)) == Xoshiro(1)
 end
+
+@testitem "Optional" begin
+  using Random
+  using Musica: Optional, SSome
+  struct Testes
+    v::Optional{Xoshiro}
+  end
+
+  @test Musica.get_or_else(Testes(SSome(Xoshiro(666))).v, Xoshiro(1)) == Xoshiro(666)
+  @test Musica.get_or_else(Testes(Xoshiro(666)).v, Xoshiro(1)) == Xoshiro(666)
+  @test Musica.get_or_else(Testes(nothing).v, Xoshiro(1)) == Xoshiro(1)
+  @test Musica.get_or_else(Testes(tnothing(Xoshiro)).v, Xoshiro(1)) == Xoshiro(1)
+end
+
 
 export get_or_else
 

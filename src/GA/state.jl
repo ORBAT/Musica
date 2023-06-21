@@ -57,7 +57,7 @@ end =#
 
   objective_fn::ObjFn
   # FIXME: tyypitys! Ei jaksais taas uutta parametria
-  rng::Maybe{Xoshiro} = nothing
+  rng::Optional{Xoshiro} = nothing
 end
 
 Options(go, mo, obj_fn, rng) = Options{typeof(go),Core.Typeof(obj_fn)}(go, mo, obj_fn, rng)
