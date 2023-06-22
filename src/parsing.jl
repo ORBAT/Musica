@@ -336,25 +336,22 @@ end
 
 """
 append siinä kohdassa kun State.output on joku mikä tahansa arvo (muu kuin Tuple, ks alla).
-Tekee tuplen State.output:ista ja o:sta.
+Tekee tuplen State.output:ista ja o:sta. Eli jos o::NewT, niin Out=Tuple{T, NewT}
 """
 function append_output(s::S, o, inp) where {O,I,OT,IT,S<:State{O,I,OT,IT}}
   new_output = map(s.output) do old_outp
-    # append!!((old_outp,), o)
     (old_outp, o)
   end
   State{eltype(new_output),I}(new_output, inp)
 end
 
 """
-append siinä kohdin kun State.output isa <:Tuple. 
+append siinä kohdin kun State.output isa <:Tuple. Pushataan vaan sen vanhan tuplen perään. Tuple{A,B} -> Tuple{A,B,C}
 """
 function append_output(s::S, o, inp) where {O,I,S<:State{O,I,<:SSome{<:Tuple}}}
   new_output = map(s.output) do old_outp
     push!!(old_outp, o)
   end
-  @info "append_output tuple" new_output
-  # _OT = typeof(new_output)
   State{eltype(new_output),I}(new_output, inp)
 end
 
@@ -458,24 +455,6 @@ _any(res::Success, @nospecialize(ps...)) = res
 
 # loppu thunkit kesken -> fail
 _any() = Failure()
-
-#= # käy läpi thunkkeja kunnes joku niistä palauttaa Success
-function _any(p1, ps...)
-  res = p1()
-
-  if res isa Function
-    # res oli thunk. Palautetaan thunk, jossa se resolvataan
-    () -> _any(res, ps...)
-  elseif res isa Success
-    # res oli Success -> katkastaan "ketju"
-    res
-  else
-    # res oli Failure, kokeillaan loppuja thunkkeja
-    () -> _any(ps...)
-  end
-end
- =#
-
 
 function (o::Or)(s::State)
   _any(@>(o.pa(s)), @>(o.pb(s)))
