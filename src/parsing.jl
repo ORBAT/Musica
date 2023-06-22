@@ -319,8 +319,11 @@ end
 function append_output end
 
 """
-append siinä kohdassa kun State.output isa TNothing.
-Palauttaa `State`n jonka output on vaan `SSome(o)` ja `OT` on typeof(o)
+append siinä kohdassa kun `State.output isa TNothing`.
+Palauttaa `State`n jonka output on vaan `SSome(o)` ja `T` on typeof(o)
+
+
+**HOX**: `s`:n alkup Output-tyyppi lentää vaan mäkeen, mutta tää on ehkä ok?
 """
 function append_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,<:TNothing,IT}}
   State{typeof(o),I}(SSome(o), inp)
@@ -491,12 +494,7 @@ function (a::And)(s::State)
   _all(Success(s), a.pa, a.pb)
 end
 
-struct Varints{MaxCodons} <: Parser{UInt} end
-## TODO: ota inputista enintään MaxCodons kodonia niin kauan ku kodonin eka bitti on 1
-
-struct UInts{NCodons} <: Parser{UInt} end
-
-@inline function collect_codons(s::State{O,I}, ::Type{Val{NCodons}}) where {NCodons,O,I}
+@inline function flatten_codons(s::State{O,I}, ::Type{Val{NCodons}}) where {NCodons,O,I}
   inp::Vector{_bottom_eltype(I)} = s.remaining_input |>
                                    Take(NCodons) |>
                                    Cat() |>
@@ -504,28 +502,77 @@ struct UInts{NCodons} <: Parser{UInt} end
   inp
 end
 
+struct UInts{NCodons} <: Parser{UInt} end
+
 function (::UInts{NCodons})(s::S) where {NCodons,O,I,S<:State{O,I}}
-  inp = collect_codons(s, Val{NCodons})
+  inp = flatten_codons(s, Val{NCodons})
 
   inp_rest = s.remaining_input |> Drop(NCodons)
   Success(append_output(s, undigits(inp), inp_rest))
 end
 
-@testitem "Parsing.UInts and Varints" begin
+"""
+Parsii varinttejä. 
+
+HOX: käytännössä vaatii inputin muotoa `Vector{Vector{Int}}`
+"""
+struct Varints{MaxCodons} <: Parser{UInt} end
+## TODO FIXME: input type Parserille??? Miten esim Varints muuten saa merkattua että se vaatii "chunkkeja"
+
+function (::Varints{MaxCodons})(s::S) where {MaxCodons,O,I,S<:State{O,I}}
+  inp = s.remaining_input
+  keep = inp |> TakeWhile(_first_is_1) |> Take(MaxCodons) |> collect
+  rest = inp |> Drop(length(keep))
+  num::UInt = if isempty(keep)
+    UInt(0)
+  else
+    keep |> MapCat(x -> @view x[2:end]) |> collect |> Musica.undigits
+  end
+
+  Success(append_output(s, num, rest))
+end
+
+@inline _first_is_1(x) = x[begin] == one(eltype(x))
+
+@testitem "Parsing.UInts" begin
   using Transducers
 
-  inp = Vector{Bool}[[1, 0, 1, 0], [1, 1, 1, 1], [1, 0, 0, 0], [0, 1, 1, 1]]
+  inp = Vector{Bool}[[1, 0, 1, 0], [1, 0, 1, 1], [1, 0, 0, 1], [0, 1, 1, 1], [1, 1, 1, 1]]
   want = inp[1:3] |> Cat() |> collect |> undigits
 
   # HOX: demo että Parsing.UInts toimii sekä "chunkatulla" että flätillä genomilla
   @test Parsing.execute(Parsing.UInts{3}(), inp) ==
-        Parsing.Success(Parsing.State(want, [[0, 1, 1, 1]]))
+        Parsing.Success(Parsing.State(want, [[0, 1, 1, 1], [1, 1, 1, 1]]))
 
 
   let inp_flat = inp |> Cat() |> collect
     @test Parsing.execute(Parsing.UInts{12}(), inp_flat) ==
-          Parsing.Success(Parsing.State(want, [0, 1, 1, 1]))
+          Parsing.Success(Parsing.State(want, [0, 1, 1, 1, 1, 1, 1, 1]))
   end
+
+end
+
+@testitem "Parsing.Varints" begin
+  using Transducers
+
+  inp = Vector{Bool}[[1, 0, 1, 0], [1, 0, 1, 1], [1, 0, 0, 1], [0, 1, 1, 1], [1, 1, 1, 1]]
+  want2 = [0, 1, 0, 0, 1, 1] |> undigits
+  want3 = [0, 1, 0, 0, 1, 1, 0, 0, 1] |> undigits
+
+
+  @test Parsing.execute(Parsing.Varints{2}(), inp) ==
+        Parsing.Success(Parsing.State(want2, [[1, 0, 0, 1], [0, 1, 1, 1], [1, 1, 1, 1]]))
+
+  @test Parsing.execute(Parsing.Varints{4}(), inp) ==
+        Parsing.Success(Parsing.State(want3, [[0, 1, 1, 1], [1, 1, 1, 1]]))
+
+
+  # let inp_flat = inp |> Cat() |> collect
+  #   @test Parsing.execute(Parsing.UInts{12}(), inp_flat) ==
+  #         Parsing.Success(Parsing.State(want, [0, 1, 1, 1, 1, 1, 1, 1]))
+  # end
+
+  # @test Parsing.execute(Parsing.Varints)
 end
 
 _execute(res::Function) = _execute(res())

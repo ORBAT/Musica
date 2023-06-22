@@ -36,6 +36,7 @@ end
 end
 
 @inline _left(a, _) = a
+@inline _left((a, _)) = a
 
 const ArgHead = Val{:BindHead}
 const ArgTail = Val{:BindTail}
