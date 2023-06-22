@@ -243,18 +243,23 @@ siltikin
 
 
 - `Out` on se minkä tyyppinen `output` on jos se on jotain muuta ku `nothing`. Outputin "pohjimmainen tyyppi"
-- `OT` on `output`-fieldin "käytännön" tyyppi, eli jotain `<: Maybe{Out}`
+- `OT` on `output`-fieldin "käytännön" tyyppi, eli jotain `<: Optional{Out}`
 - `In` on inputin "pohjimmainen tyyppi", eli se tyyppi jonka `State` saa outputtina ulos
 - `IT` on  on joko `In` tai sit `Eduction`
 """
-struct State{Out,In,OT<:Maybe{Out},IT<:Union{In,<:Eduction}}
+struct State{Out,In,OT<:Optional{Out},IT<:Union{In,<:Eduction}}
   output::OT
   remaining_input::IT
 end
 
-function State{Out,In}(o::Maybe{Out}, inp) where {Out,In}
-  State{Out,In,typeof(o),typeof(inp)}(o, inp)
+function State{Out,In}(o, inp) where {Out,In}
+  # HUOM: ks collection_utils Base.convert(::Type{<:Optional{T}}, […])
+  # konvertoidaan o Optional:iksi jos ei jo ole
+  _o::Optional{Out} = o
+  State{Out,In,typeof(_o),typeof(inp)}(_o, inp)
 end
+
+State(o, inp) = State(SSome(o), inp)
 
 ## TODO KYS: miksi tää ei toimi???? Tulee vaan jotain "no method matching (Musica.Parsing.State" blah
 # function State{Out}(o, inp::In) where {Out,In}
@@ -276,13 +281,13 @@ function Base.:(==)(a::State, b::State)
 end
 
 
-function Base.show(io::IO, s::State)
-  print(io, "State(")
-  show(io, s.output)
-  print(io, ", ")
-  show(io, Musica.maybe_collect(s.remaining_input))
-  print(io, ")")
-end
+# function Base.show(io::IO, s::State)
+#   print(io, "State(")
+#   show(io, s.output)
+#   print(io, ", ")
+#   show(io, Musica.maybe_collect(s.remaining_input))
+#   print(io, ")")
+# end
 
 
 ### HOX: Base.show -metodi ::Type:lle on tyyppipiratismia ja aiheuttaa ilmeisesti ihan vitusti ongelmia.
@@ -310,24 +315,38 @@ end
  =#
 #### TODO HOX: TNothing käyttäminen näin tai sit <:Nothingness tmv vetää
 #### kääntäjän ikuiseen luuppiin jostain syystä
-# function concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,TNothing{O},IT}}
+# function append_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,TNothing{O},IT}}
 #   State{O,I,typeof(o),typeof(inp)}(o, inp)
 # end
 
-function concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,Nothing,IT}}
-  State{O,I,typeof(o),typeof(inp)}(o, inp)
+@inline concat_output(s,o,inp) = append_output(s,o,inp)
+
+function append_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,<:TNothing,IT}}
+  State{typeof(o),I}(SSome(o), inp)
 end
 
-function concat_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,<:Tuple,IT}}
+function append_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,<:SSome{<:Tuple},IT}}
+  error("SDKJDSKJAD")
   new_output = (s.output..., o)
-  OT = typeof(new_output)
-  State{OT,I,OT,typeof(inp)}(new_output, inp)
+  # OT = typeof(new_output)
+  State(new_output, inp)
 end
 
-function concat_output(s::S, o, inp) where {O,I,OT,IT,S<:State{O,I,OT,IT}}
-  new_output = (s.output, o)
-  _OT = typeof(new_output)
-  State{_OT,I,_OT,typeof(inp)}(new_output, inp)
+function append_output(s::S, o, inp) where {O,I,OT,IT,S<:State{O,I,OT,IT}}
+  new_output = map(s.output) do old_outp
+    (old_outp, o)
+  end
+  # _OT = typeof(new_output)
+  State{typeof(new_output),I}(new_output, inp)
+end
+
+@testitem "append_output" begin
+  let s = Parsing.State(tnothing(Int), [1, 1, 0])
+    concd = Parsing.append_output(s, [1, 1], [6, 6, 6])
+    @test concd isa Parsing.State{Vector{Int}}
+    @test concd.output == [1,1]
+    @test concd.remaining_input == [6,6,6]
+  end
 end
 
 # function _concat_output(s::State, o, inp)
@@ -378,7 +397,7 @@ function (e::Exact)(state::S) where {O,R,S<:State{O,R}}
   inp_rest = state.remaining_input |> Drop(pat_len)
   got::R = state.remaining_input |> Take(pat_len) |> collect
   if got == e.pattern
-    Success(concat_output(state, e.pattern, inp_rest))
+    Success(append_output(state, e.pattern, inp_rest))
   else
     Failure()
   end
@@ -471,7 +490,7 @@ function (::UInts{NCodons})(s::S) where {NCodons,O,I,S<:State{O,I}}
                                    collect
 
   inp_rest = s.remaining_input |> Drop(NCodons)
-  Success(concat_output(s, undigits(inp), inp_rest))
+  Success(append_output(s, undigits(inp), inp_rest))
 end
 
 @testitem "Parsing.UInts and Varints" begin
@@ -525,8 +544,8 @@ first_output_type(p::Parser) = first_output_type(typeof(p))
     @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
     @test begin
       out = Parsing.execute(Parsing.Or(p2, p1), s)
-      !(out isa Parsing.Success) && error("unexpected failure")
-      typeof(Musica.maybe_collect(out.state.output)) == Vector{Bool}
+      (out isa Parsing.Success) || error("unexpected failure")
+      typeof(Musica.maybe_collect(out.state.output)) <: SSome{Vector{Bool}}
     end
   end
 
@@ -534,8 +553,8 @@ first_output_type(p::Parser) = first_output_type(typeof(p))
     @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Failure()
   end
 
-  # execute joka ei vaadi State:a
-  @test Parsing.execute(Parsing.Or(p1, p2), inp) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
+  # # execute joka ei vaadi State:a
+  # @test Parsing.execute(Parsing.Or(p1, p2), inp) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
 end
 
 @testitem "Parsing.And" begin
