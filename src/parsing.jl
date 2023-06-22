@@ -250,16 +250,25 @@ siltikin
 struct State{Out,In,OT<:Optional{Out},IT<:Union{In,<:Eduction}}
   output::OT
   remaining_input::IT
+
+  # function State{Out,In}(o::Optional{Out}, inp) where {Out,In}
+  #   # HUOM: ks collection_utils Base.convert(::Type{<:Optional{T}}, […])
+  #   # konvertoidaan o Optional:iksi jos ei jo ole
+  #   new{Out,In,typeof(o),typeof(inp)}(o, inp)
+  # end
+
+  function State{Out,In}(o, inp) where {Out,In}
+    # HUOM: ks collection_utils Base.convert(::Type{<:Optional{T}}, […])
+    # konvertoidaan o Optional:iksi jos ei jo ole
+    _o::Optional{Out} = o
+    new{Out,In,typeof(_o),typeof(inp)}(_o, inp)
+  end
+  
 end
 
-function State{Out,In}(o, inp) where {Out,In}
-  # HUOM: ks collection_utils Base.convert(::Type{<:Optional{T}}, […])
-  # konvertoidaan o Optional:iksi jos ei jo ole
-  _o::Optional{Out} = o
-  State{Out,In,typeof(_o),typeof(inp)}(_o, inp)
-end
 
-State(o, inp) = State(SSome(o), inp)
+State(o, inp) = State{typeof(o),typeof(inp)}(o, inp)
+State(o::Optional{T}, inp) where {T} = State{T,typeof(inp)}(o, inp)
 
 ## TODO KYS: miksi tää ei toimi???? Tulee vaan jotain "no method matching (Musica.Parsing.State" blah
 # function State{Out}(o, inp::In) where {Out,In}
