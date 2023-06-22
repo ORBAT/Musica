@@ -1,6 +1,6 @@
 
 using StaticArrays, StructArrays, TestItems, Folds, Random
-using ..Musica: _SizedTypes, Maybe
+using ..Musica: _SizedTypes
 using ..Musica
 using Printf
 using AutoHashEqualsCached
