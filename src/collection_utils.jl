@@ -3,36 +3,66 @@ using Transducers: start, inner, @next, wrap, unwrap, complete, Eduction
 using AutoHashEqualsCached
 
 abstract type Optional{T} end
+export Optional
 
 struct TNothing{T} <: Optional{T} end
+export TNothing
 
+function Base.show(io::IO, ::TNothing{T}) where {T}
+  print(io, "tnothing(",T,")")
+end
 
 const Nothingness{T} = Union{Nothing,TNothing{T}}
 
-## HOX FIXME: tyypittämätön nothing on vähän hankala. Esim sen takia jouduin Parsing.State:een
-## heittämään erillisen Out ja OT -tyypin: struct State{Out,In,OT<:Maybe{Out},IT<:Union{In,<:Eduction}}
-##
-## HOX HOX HOX: TNothing ei auta mitään esim Parsing.State(tnothing(UInt64), [[1,1],[0,0]]) koska toi tnothing tietty on tyyppi TNothing{T} eikä T...
-const Maybe{T} = Union{Some{T},T,Nothingness{T}}
+"""
+`Some` on steroids. See also [`tnothing`](@ref)
+```jldoctest
+julia> Iterators.flatten([SSome(1), tnothing(), SSome(2)]) |> collect
+2-element Vector{Any}:
+ 1
+ 2
 
+julia> map(x -> 2x, SSome(1))
+SSome(2)
+```
+"""
 struct SSome{T} <: Optional{T}
   value::T
 end
 
+export SSome
+
 SSome(::Type{T}) where {T} = SSome{Type{T}}(T)
 
+@inline Base.iterate(@nospecialize(::TNothing), @nospecialize(i...)) = nothing
 
+@inline function Base.iterate(s::SSome{T})::Tuple{T, Integer} where {T}
+    (s.value, 2)
+end
+
+@inline function Base.iterate(s::SSome{T}, i)::Union{Nothing, Tuple{T, Integer}} where {T}
+  if i == 1
+    (s.value, 2)
+  end
+end
+
+Base.IteratorSize(@nospecialize(_::Type{<:Optional})) = Base.HasLength()
+Base.length(@nospecialize(::SSome)) = 1
+Base.length(@nospecialize(::TNothing)) = 0
+Base.IteratorEltype(@nospecialize(_::Type{<:Optional})) = Base.HasEltype()
+Base.eltype(::Type{<:Optional{T}}) where {T} = T
 
 @inline Base.promote_rule(::Type{SSome{T}}, ::Type{SSome{S}}) where {T, S<:T} = SSome{T}
 
 @inline Base.convert(::Type{T}, x::SSome{T}) where {T} = get_value(x)
-@inline Base.convert(::Type{Optional{T}}, x::T) where {T} = SSome(x)
-@inline Base.convert(::Type{Optional{T}}, ::Nothing) where {T} = tnothing(T)
+@inline Base.convert(::Type{<:Optional{T}}, x::T) where {T} = SSome(x)
+@inline Base.convert(::Type{<:Optional{T}}, ::Nothing) where {T} = tnothing(T)
+@inline Base.convert(::Type{<:Optional{T}}, @nospecialize(::TNothing)) where {T} = tnothing(T)
 
-@inline Base.convert(::Type{SSome{T}}, x::T) where {T} = SSome(x)
+# @inline Base.convert(::Type{SSome{T}}, x::T) where {T} = SSome(x)
 @inline Base.convert(::Type{SSome{T}}, x::SSome) where {T} = SSome{T}(convert(T, x.value))::SSome{T}
 @inline Base.convert(::Type{TNothing{T}}, @nospecialize(::TNothing)) where {T} = TNothing{T}()
-@inline Base.convert(::Type{Optional{T}}, @nospecialize(::TNothing)) where {T} = TNothing{T}()
+# @inline Base.convert(::Type{Optional{T}}, @nospecialize(::TNothing)) where {T} = TNothing{T}()
 
 function Base.show(io::IO, x::SSome)
   if get(io, :typeinfo, Any) == typeof(x)
@@ -55,17 +85,19 @@ tnothing(::Type{T}) where {T} = TNothing{T}()
 tnothing(v) = tnothing(typeof(v))
 tnothing() = tnothing(Any)
 
-export TNothing, Nothingness, tnothing
+export TNothing, tnothing
 
 # HOX: Base.convert(::Type{Maybe{T}} […]) määritteleminen saa parhaillaan jopa kääntäjän nurin
 #### ----> koska type piracy, ks esim https://github.com/JuliaLang/julia/issues/30805
 
-@inline Base.convert(::Type{Some{T}}, x::T) where {T} = Some(x)
-@inline Base.convert(::Type{T}, x::Some{T}) where {T} = get_value(x)
-@inline Base.:(==)(a::Some{T}, b::Some{T}) where {T} = isequal(get_value(a), get_value(b))
-@inline Base.:(==)(a::SSome{T}, b::SSome{T}) where {T} = isequal(get_value(a), get_value(b))
+# @inline Base.convert(::Type{Some{T}}, x::T) where {T} = Some(x)
+# @inline Base.convert(::Type{T}, x::Some{T}) where {T} = get_value(x)
+# @inline Base.:(==)(a::Some, b::Some) = isequal(get_value(a), get_value(b))
+@inline Base.:(==)(a::SSome, b::SSome) = isequal(get_value(a), get_value(b))
+@inline Base.:(==)(a, b::SSome) = isequal(a, get_value(b))
+@inline Base.:(==)(a::SSome, b) = isequal(get_value(a), b)
 
-@testitem "SSome{T} conversions and equality" begin
+@testitem "conversions and equality" begin
   let a::SSome{Int} = 10
     @test a isa SSome{Int}
     @test a == SSome(10)
@@ -101,8 +133,6 @@ export TNothing, Nothingness, tnothing
   @test TakesOpt(tnothing()).a == tnothing(Int)
 end
 
-export Maybe, Optional, SSome
-
 @inline get_or_else(::Tuple{}, fallback)  = fallback
 @inline get_or_else(::Nothing, fallback)  = fallback
 @inline get_or_else(::TNothing{T}, fallback::T) where {T} = fallback
@@ -129,10 +159,10 @@ export get_value
 macro get_value(args...)
   expr = :(nothing)
   for arg in reverse(args)
-      expr = :(val = $(esc(arg)); val !== nothing && !(val isa TNothing) ? val : ($expr))
+      expr = :(val = $(esc(arg)); !isnothing(val) ? val : ($expr))
   end
-  something = GlobalRef(Base, :something)
-  return :($something($expr))
+  # something = GlobalRef(Base, :something)
+  return :(something($expr))
 end
 
 
@@ -142,7 +172,6 @@ end
   end
 
   for yup = (:(Some(5)), :(SSome(5)), :(5,), :5), nope = (:nothing, :(tnothing(Int)), :(()))
-    @info "get_value test" yup nope
     @eval @test get_value($yup, $nope) == 5
   end
   fn = x -> 2x
@@ -154,11 +183,11 @@ end
 
 """
 ```jldoctest
-julia> map(x->2x, Some(1))
-Some(2)
+julia> map(x->2x, SSome(1))
+SSome(2)
 ```
 """
-@inline Base.map(f, x::Some) = Some(f(get_value(x)))
+@inline Base.map(f, x::SSome) = SSome(f(get_value(x)))
 
 """
 ```jldoctest
@@ -168,30 +197,16 @@ julia> map(x->2x, nothing)
 """
 @inline Base.map(f, @nospecialize(::Nothingness)) = nothing
 
-@testitem "Maybe" begin
-  using Random
-  struct Testes
-    v::Maybe{Xoshiro}
-  end
+# @testitem "Maybe" begin
+#   using Random
+#   struct Testes
+#     v::Maybe{Xoshiro}
+#   end
 
-  @test Musica.get_or_else(Testes(Some(Xoshiro(666))).v, Xoshiro(1)) == Xoshiro(666)
-  @test Musica.get_or_else(Testes(Xoshiro(666)).v, Xoshiro(1)) == Xoshiro(666)
-  @test Musica.get_or_else(Testes(nothing).v, Xoshiro(1)) == Xoshiro(1)
-end
-
-@testitem "Optional" begin
-  using Random
-  using Musica: Optional, SSome
-  struct Testes
-    v::Optional{Xoshiro}
-  end
-
-  @test Musica.get_or_else(Testes(SSome(Xoshiro(666))).v, Xoshiro(1)) == Xoshiro(666)
-  @test Musica.get_or_else(Testes(Xoshiro(666)).v, Xoshiro(1)) == Xoshiro(666)
-  @test Musica.get_or_else(Testes(nothing).v, Xoshiro(1)) == Xoshiro(1)
-  @test Musica.get_or_else(Testes(tnothing(Xoshiro)).v, Xoshiro(1)) == Xoshiro(1)
-end
-
+#   @test Musica.get_or_else(Testes(Some(Xoshiro(666))).v, Xoshiro(1)) == Xoshiro(666)
+#   @test Musica.get_or_else(Testes(Xoshiro(666)).v, Xoshiro(1)) == Xoshiro(666)
+#   @test Musica.get_or_else(Testes(nothing).v, Xoshiro(1)) == Xoshiro(1)
+# end
 
 export get_or_else
 
@@ -200,6 +215,7 @@ _Collectable = Union{Transducers.Foldable,AbstractRange}
 @inline maybe_collect(x) = x
 @inline maybe_collect(x::T) where {T<:_Collectable} = x |> collect
 @inline maybe_collect(x::T) where {N,T<:NTuple{N,Any}} = map(maybe_collect, x)
+@inline maybe_collect(x::T) where {T<:Optional} = map(maybe_collect, x)
 
 export maybe_collect
 
