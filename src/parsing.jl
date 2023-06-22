@@ -281,13 +281,13 @@ function Base.:(==)(a::State, b::State)
 end
 
 
-# function Base.show(io::IO, s::State)
-#   print(io, "State(")
-#   show(io, s.output)
-#   print(io, ", ")
-#   show(io, Musica.maybe_collect(s.remaining_input))
-#   print(io, ")")
-# end
+function Base.show(io::IO, s::State{O,I}) where {O,I}
+  print(io, "State{",I," -> ",O,"} (")
+  show(io, s.output)
+  print(io, ", ")
+  show(io, Musica.maybe_collect(s.remaining_input))
+  print(io, ")")
+end
 
 
 ### HOX: Base.show -metodi ::Type:lle on tyyppipiratismia ja aiheuttaa ilmeisesti ihan vitusti ongelmia.
@@ -319,33 +319,65 @@ end
 #   State{O,I,typeof(o),typeof(inp)}(o, inp)
 # end
 
-@inline concat_output(s,o,inp) = append_output(s,o,inp)
+"""
+    append_output(state, new_output, new_input)
 
+    State{Out,OT=TNothing} -> State{Out,OT=SSome{Out}} -> State{Tuple{NewOut,Out}, OT=SSome{Tuple{NewOut,Out}}}
+"""
+function append_output end
+
+"""
+append siinä kohdassa kun State.output isa TNothing.
+Palauttaa `State`n jonka output on vaan `SSome(o)` ja `OT` on typeof(o)
+"""
 function append_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,<:TNothing,IT}}
   State{typeof(o),I}(SSome(o), inp)
 end
 
-function append_output(s::S, o, inp) where {O,I,IT,S<:State{O,I,<:SSome{<:Tuple},IT}}
-  error("SDKJDSKJAD")
-  new_output = (s.output..., o)
-  # OT = typeof(new_output)
-  State(new_output, inp)
-end
-
+"""
+append siinä kohdassa kun State.output on joku mikä tahansa arvo (muu kuin Tuple, ks alla).
+Tekee tuplen State.output:ista ja o:sta.
+"""
 function append_output(s::S, o, inp) where {O,I,OT,IT,S<:State{O,I,OT,IT}}
   new_output = map(s.output) do old_outp
+    # append!!((old_outp,), o)
     (old_outp, o)
   end
-  # _OT = typeof(new_output)
-  State{typeof(new_output),I}(new_output, inp)
+  State{eltype(new_output),I}(new_output, inp)
 end
 
+"""
+append siinä kohdin kun State.output isa <:Tuple. 
+"""
+function append_output(s::S, o, inp) where {O,I,S<:State{O,I,<:SSome{<:Tuple}}}
+  new_output = map(s.output) do old_outp
+    push!!(old_outp, o)
+  end
+  @info "append_output tuple" new_output
+  # _OT = typeof(new_output)
+  State{eltype(new_output),I}(new_output, inp)
+end
+
+
 @testitem "append_output" begin
+  using Transducers
   let s = Parsing.State(tnothing(Int), [1, 1, 0])
     concd = Parsing.append_output(s, [1, 1], [6, 6, 6])
     @test concd isa Parsing.State{Vector{Int}}
     @test concd.output == [1,1]
     @test concd.remaining_input == [6,6,6]
+  end
+
+  let inp=Bool[1, 0, 1, 0], s = Parsing.State{Vector{Bool},Vector{Bool}}(Bool[], inp)
+
+    s2 = Parsing.append_output(s, [1,1,1], s.remaining_input |> Drop(1))
+    @test s2 isa Parsing.State{O,I,<:SSome{<:Tuple}} where {O,I}
+    @test s2.output == (Bool[], [1,1,1])
+    @test s2.output isa SSome{Tuple{Vector{Bool}, Vector{Int}}}
+
+    s3 = Parsing.append_output(s2, [:yee, :yuu], s2.remaining_input |> Drop(1))
+    @test s3.output == (Bool[], [1,1,1], [:yee, :yuu])
+    @test s3.output isa SSome{Tuple{Vector{Bool}, Vector{Int}, Vector{Symbol}}}
   end
 end
 
