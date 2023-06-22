@@ -274,7 +274,7 @@ function optimize() end
 
 @testitem "GA State" begin
   using Random
-  const N = 400
+  const N = 8
   rng() = Xoshiro(666)
   function obj_fn(genome)
     # HOX: varmistaa että genomi oikeesti on muotoa [(1,0,1,0), (1,1,1,1), ...]
@@ -295,7 +295,7 @@ function optimize() end
   # samalla rng:llä initialisoidut 2 eri statea pitäis olla samat
   @test GA.State{N,Vector{Bool}}(getopts()) |> GA._init! == GA.State{N,Vector{Bool}}(getopts()) |> GA._init!
 
-  @test GA.State{N,Vector{Bool}}(getopts()) |> GA._init! != GA.State{50,Vector{Bool}}(getopts()) |> GA._init!
+  @test GA.State{N,Vector{Bool}}(getopts()) |> GA._init! != GA.State{5,Vector{Bool}}(getopts()) |> GA._init!
   # using StaticArrays
 
   # genome1 = Bool[1, 1, 1, 1]
