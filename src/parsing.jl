@@ -227,35 +227,18 @@ using TestItems
 
 abstract type Parser{Out} <: Function end
 
+@inline output_type(::Type{<:Parser{T}}) where {T} = T
+@inline output_type(p::Parser) = output_type(typeof(p))
+
 """
-
-## TODO FIXME: pääsiskö OT:sta eroon ny kun löytyy TNothing?
-##### ---> HUOM EI PÄÄSE: 
-
-    let s = Parsing.State(tnothing(UInt64), [[1,1],[0,0]])
-      @show s
-    end
-
-    State:n Out:ista tulee tietty TNothing{T}...
-
-Mut kun vaihdoin State{Out,In,IT<:Union{In,<:Eduction}}, niin
-siltikin 
-
-
 - `Out` on se minkä tyyppinen `output` on jos se on jotain muuta ku `nothing`. Outputin "pohjimmainen tyyppi"
-- `OT` on `output`-fieldin "käytännön" tyyppi, eli jotain `<: Optional{Out}`
-- `In` on inputin "pohjimmainen tyyppi", eli se tyyppi jonka `State` saa outputtina ulos
-- `IT` on  on joko `In` tai sit `Eduction`
+- `OT` on `output`-fieldin "käytännön" tyyppi, eli jotain `<: Optional{Out}`. Välttää sen että output olis abstrakti tyyppi
+- `In` on inputin "pohjimmainen tyyppi". Pitäis varmaan olla joku array tmv.
+- `IT` on  on joko `In` tai sit `Eduction`. Ts. tällä saa remaining_input:ista lazyn
 """
 struct State{Out,In,OT<:Optional{Out},IT<:Union{In,<:Eduction}}
   output::OT
   remaining_input::IT
-
-  # function State{Out,In}(o::Optional{Out}, inp) where {Out,In}
-  #   # HUOM: ks collection_utils Base.convert(::Type{<:Optional{T}}, […])
-  #   # konvertoidaan o Optional:iksi jos ei jo ole
-  #   new{Out,In,typeof(o),typeof(inp)}(o, inp)
-  # end
 
   function State{Out,In}(o, inp) where {Out,In}
     # HUOM: ks collection_utils Base.convert(::Type{<:Optional{T}}, […])
@@ -263,7 +246,7 @@ struct State{Out,In,OT<:Optional{Out},IT<:Union{In,<:Eduction}}
     _o::Optional{Out} = o
     new{Out,In,typeof(_o),typeof(inp)}(_o, inp)
   end
-  
+
 end
 
 
@@ -291,7 +274,7 @@ end
 
 
 function Base.show(io::IO, s::State{O,I}) where {O,I}
-  print(io, "State{",I," -> ",O,"} (")
+  print(io, "State{", I, " -> ", O, "} (")
   show(io, s.output)
   print(io, ", ")
   show(io, Musica.maybe_collect(s.remaining_input))
@@ -370,20 +353,32 @@ end
   let s = Parsing.State(tnothing(Int), [1, 1, 0])
     concd = Parsing.append_output(s, [1, 1], [6, 6, 6])
     @test concd isa Parsing.State{Vector{Int}}
-    @test concd.output == [1,1]
-    @test concd.remaining_input == [6,6,6]
+    @test concd.output == [1, 1]
+    @test concd.remaining_input == [6, 6, 6]
   end
 
-  let inp=Bool[1, 0, 1, 0], s = Parsing.State{Vector{Bool},Vector{Bool}}(Bool[], inp)
+  let inp = Bool[1, 0, 1, 0], s = Parsing.State{Vector{Bool},Vector{Bool}}(Bool[], inp)
 
-    s2 = Parsing.append_output(s, [1,1,1], s.remaining_input |> Drop(1))
+    s2 = Parsing.append_output(s, [1, 1, 1], s.remaining_input |> Drop(1))
     @test s2 isa Parsing.State{O,I,<:SSome{<:Tuple}} where {O,I}
-    @test s2.output == (Bool[], [1,1,1])
-    @test s2.output isa SSome{Tuple{Vector{Bool}, Vector{Int}}}
+    @test s2.output == (Bool[], [1, 1, 1])
+    @test s2.output isa SSome{Tuple{Vector{Bool},Vector{Int}}}
 
     s3 = Parsing.append_output(s2, [:yee, :yuu], s2.remaining_input |> Drop(1))
-    @test s3.output == (Bool[], [1,1,1], [:yee, :yuu])
-    @test s3.output isa SSome{Tuple{Vector{Bool}, Vector{Int}, Vector{Symbol}}}
+    @test s3.output == (Bool[], [1, 1, 1], [:yee, :yuu])
+    @test s3.output isa SSome{Tuple{Vector{Bool},Vector{Int},Vector{Symbol}}}
+  end
+
+  let inp = Bool[1, 0, 1, 0], s = Parsing.State{Vector{Bool},Vector{Bool}}(tnothing(), inp)
+
+    s2 = Parsing.append_output(s, [1, 1, 1], s.remaining_input |> Drop(1))
+    @test s2 isa Parsing.State{O,I,<:SSome{<:Vector{<:Integer}}} where {O,I}
+    @test s2.output == [1, 1, 1]
+    @test s2.output isa SSome{<:Vector{<:Integer}}
+
+    s3 = Parsing.append_output(s2, [:yee, :yuu], s2.remaining_input |> Drop(1))
+    @test s3.output == ([1, 1, 1], [:yee, :yuu])
+    @test s3.output isa SSome{Tuple{Vector{Int},Vector{Symbol}}}
   end
 end
 
@@ -450,7 +445,7 @@ struct Or{O,PA<:Parser,PB<:Parser} <: Parser{O}
 end
 
 function Or(pa::PA, pb::PB) where {A,B,PA<:Parser{A},PB<:Parser{B}}
-  Or{Base.promote_type(A, B),PA,PB}(pa, pb)
+  Or{Union{A,B},PA,PB}(pa, pb)
 end
 
 # _any käy läpi thunkkeja kunnes joku niistä palauttaa Success.
@@ -476,9 +471,7 @@ struct And{A,B,PA<:Parser{A},PB<:Parser{B}} <: Parser{Tuple{A,B}}
 end
 
 
-function first_output_type(::Type{<:And{A}}) where {A}
-  A
-end
+@inline first_output_type(::Type{<:And{A}}) where {A} = A
 
 # käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten seuraavalle.
 # vrt _first_of, jossa ei tarvii kuljettaa tota resulttia mukana, koska kaikki sille annettavat parserit saa saman inputin
@@ -503,11 +496,16 @@ struct Varints{MaxCodons} <: Parser{UInt} end
 
 struct UInts{NCodons} <: Parser{UInt} end
 
-function (::UInts{NCodons})(s::S) where {NCodons,O,I,S<:State{O,I}}
+@inline function collect_codons(s::State{O,I}, ::Type{Val{NCodons}}) where {NCodons,O,I}
   inp::Vector{_bottom_eltype(I)} = s.remaining_input |>
                                    Take(NCodons) |>
                                    Cat() |>
                                    collect
+  inp
+end
+
+function (::UInts{NCodons})(s::S) where {NCodons,O,I,S<:State{O,I}}
+  inp = collect_codons(s, Val{NCodons})
 
   inp_rest = s.remaining_input |> Drop(NCodons)
   Success(append_output(s, undigits(inp), inp_rest))
@@ -517,10 +515,16 @@ end
   using Transducers
 
   inp = Vector{Bool}[[1, 0, 1, 0], [1, 1, 1, 1], [1, 0, 0, 0], [0, 1, 1, 1]]
+  want = inp[1:3] |> Cat() |> collect |> undigits
 
-  let want = inp[1:3] |> Cat() |> collect |> undigits
-    @test Parsing.execute(Parsing.UInts{3}(), inp) ==
-          Parsing.Success(Parsing.State(want, [[0, 1, 1, 1]]))
+  # HOX: demo että Parsing.UInts toimii sekä "chunkatulla" että flätillä genomilla
+  @test Parsing.execute(Parsing.UInts{3}(), inp) ==
+        Parsing.Success(Parsing.State(want, [[0, 1, 1, 1]]))
+
+
+  let inp_flat = inp |> Cat() |> collect
+    @test Parsing.execute(Parsing.UInts{12}(), inp_flat) ==
+          Parsing.Success(Parsing.State(want, [0, 1, 1, 1]))
   end
 end
 
@@ -532,18 +536,16 @@ function execute(p::Parser, s::State)
 end
 
 function execute(p::P, inp::In) where {Out,In,P<:Parser{Out}}
-  # HOX: jos vaan käyttää State{Out}, niin esim. execute(And(p1, p2), Bool[1,1,0,0]) antais
-  # State:n tyypiksi State{Tuple{A,B}} eikä State{A} niinko pitäisi
+  # HOX: kun State luodaan, sen outputin pitää vastata sitä mikä P:stä pullahtaa ekana ulos. Esim. And(p1, p2):ssa
+  # tää olis sit p1:n output-tyyppi
   s = State{first_output_type(P),In}(nothing, inp)
   # @info "execute" s typeof(s)
   execute(p, s)
 end
 
-function first_output_type(::Type{<:Parser{O}}) where {O}
-  O
-end
+@inline first_output_type(::Type{<:Parser{O}}) where {O} = O
 
-first_output_type(p::Parser) = first_output_type(typeof(p))
+@inline first_output_type(p::Parser) = first_output_type(typeof(p))
 
 
 @inline _bottom_eltype(::Type{T}) where {T} =
@@ -553,19 +555,18 @@ first_output_type(p::Parser) = first_output_type(typeof(p))
 
 
 @testitem "Parsing.Or" begin
-  inp = Bool[1, 1, 0, 0]
+  inp = Bool[1, 1, 1, 0]
   p1 = Parsing.Exact(Bool[1, 1])
   p2 = Parsing.Exact(Bool[0, 0])
   let s = Parsing.State{Vector{Bool},Vector{Bool}}(nothing, inp)
-    @test Parsing.execute(Parsing.Or(p1, p2), s) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
+    @test Parsing.execute(Parsing.Or(p1, p2), s) == Parsing.Success(Parsing.State([1, 1], [1, 0]))
   end
 
   let s = Parsing.State{Vector{Bool},Vector{Bool}}(nothing, inp)
-    @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
-    @test begin
-      out = Parsing.execute(Parsing.Or(p2, p1), s)
-      (out isa Parsing.Success) || error("unexpected failure")
-      typeof(Musica.maybe_collect(out.state.output)) <: SSome{Vector{Bool}}
+    @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([1, 1], [1, 0]))
+    let out = Parsing.execute(Parsing.Or(p2, p1), s)
+      @test out isa Parsing.Success
+      @test typeof(Musica.maybe_collect(out.state.output)) <: SSome{Vector{Bool}}
     end
   end
 
@@ -587,21 +588,22 @@ end
   let s = State{Vector{Bool},Vector{Bool}}(nothing, inp)
     @test Parsing.execute(Parsing.And(p1, p2), s) ==
           Success(State((Bool[1, 1], Bool[0, 0]), Any[]))
-    # @test begin
-    #   out = Parsing.execute(Parsing.And(p1, p2), s)
-    #   !(out isa Parsing.Success) && error("unexpected failure")
-    #   typeof(Musica.maybe_collect(out.state.output)) == Vector{Vector{Bool}}
-    # end
+
+    let out = Parsing.execute(Parsing.And(p1, p2), s)
+      @test out isa Parsing.Success
+      @test typeof(Musica.maybe_collect(out.state.output)) == SSome{Tuple{Vector{Bool},Vector{Bool}}}
+    end
   end
 
-  # execute joka ei vaadi State:a
+  # execute shortcut joka muuttaa inp:n stateksi
   @test Parsing.execute(Parsing.And(p1, p2), inp) == Success(State((Bool[1, 1], Bool[0, 0]), Any[]))
 
   let s = State(Bool[], Bool[1, 1, 1, 0])
     @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Failure()
   end
 
-  @test Parsing.first_output_type(Parsing.And(p1, p2)) == Vector{Bool}
+
+  @test Parsing.first_output_type(Parsing.And(Parsing.UInts{3}(), p2)) == UInt64
 
 end
 
