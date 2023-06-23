@@ -1,4 +1,4 @@
-using TestItems, Test
+using TestItems
 
 abstract type Neuron{NStates,InWidth,OutWidth} <: Function end
 

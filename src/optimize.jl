@@ -1,4 +1,4 @@
-using GrayCode, TestItems, Test, Folds, Metaheuristics, StatsBase, Random
+using GrayCode, TestItems, Folds, StatsBase, Random
 
 """
     normalize(v)
@@ -21,11 +21,11 @@ julia> normalize([5 5 5])
 """
 function normalize(x)
   (_min, _max) = extrema(x)
-  if 0 == _min == _max
+  if zero(_min) == _min == _max
     return zeros(Float64, size(x))
   end
   _diff = _max - _min
-  if _diff == 0
+  if _diff == zero(_diff)
     ones(Float64, size(x))
   else
     (x .- _min) ./ _diff
@@ -41,7 +41,7 @@ export normalize
 
 export normalize_num
 
-function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=Map(@£(normalize_num(2^_row_width() - 1)) ∘ row_from_gray))
+function create_fitness_fn(fn=StatsBase.rmsd, output_mapper=Map(@<(normalize_num(2^_row_width() - 1)) ∘ row_from_gray))
   @inline function fitness_fn(wanted, result)
     _wanted = wanted |> maybe_collect
     _result = result |> output_mapper |> maybe_collect
@@ -63,9 +63,9 @@ end
 
 export create_obj_fn
 
-# gray_inp_out(w::Type{Val{width}}=Val{16}) where {width} = @£(num_to_gray_row(w)), (@£(_normalize_num(2^width - 1)) ∘ row_from_gray)
+# gray_inp_out(w::Type{Val{width}}=Val{16}) where {width} = @<(num_to_gray_row(w)), (@<(_normalize_num(2^width - 1)) ∘ row_from_gray)
 
-function input_based_result_gen(input_mapper=@£(num_to_gray_row(Val{_row_width()})))
+function input_based_result_gen(input_mapper=@<(num_to_gray_row(Val{_row_width()})))
   @inline function _input_based_result_gen(input, indiv)
     input |> Map(indiv ∘ input_mapper)
   end
@@ -106,7 +106,7 @@ export sampled_data_generator
 
 ## HOX: näissä mun objective fn:issä yleensä osa joka ottaa input bitit ja tekee niistä jonkun fenotyypin (tässä tapauksessa 
 ## funktion), ja sit osa joka hieroo sitä training dataa (Map(num_to_gray_row)), ajaa sen sen fenotyypin läpi, ja sit hieroo 
-## sitä fenotyypin outputtia (Map(@£ _normalize_num(state_max_val)))
+## sitä fenotyypin outputtia (Map(@< _normalize_num(state_max_val)))
 ##
 ## HOX HOX: itse asiassa se on jotain suuntaan:
 ##    (_, indiv) = bits |> genotype_parser
@@ -149,69 +149,3 @@ function _test_wanted_output_rastr(D=10, step=0.5)
 end
 
 
-## HUOM: _Neverstop ja default_stop_check-metodi on klugeja joilla yritän estää vitun Metaheuristicsia luovuttamasta kesken kaiken
-
-struct _Neverstop <: Metaheuristics.AbstractTermination end
-
-Metaheuristics.stop_check(population, criteria::_Neverstop) = false
-
-
-# function Metaheuristics.default_stop_check(status, information, options)
-#   Metaheuristics.time_stop_check(status, information, options)
-# end
-
-#= _test_obj_fn() = to_obj_fn(_test_parser_dynamic(),
-  sampled_result_generator(_test_wanted_output(6)),
-  Musica.make_fitness_function())
- =#
-function _do_opt(; f_calls_limit=typemax(Int), time_limit=60 * 0.5, p_mutation=64e-4, termination=Metaheuristics.RelativeFunctionConvergence(), pop_size=_pop_size(),parser=_test_parser_dynamic(),with_indivs=())
-
-  pop_size = pop_size
-
-  information = Information(f_optimum=0.0)
-  options = Options(f_tol=eps(),
-    time_limit=time_limit,
-    parallel_evaluation=true,
-    store_convergence=true,
-    iterations=typemax(Int64),
-    f_calls_limit=f_calls_limit
-  )
-  # wanted = _test_wanted_output(6)
-  # obj_fn = _objective_fn_parallel(to_obj_fn(_test_parser_dynamic(), gray_multi_seq_sample_fitness_fn(wanted; state_bits=state_bits)))
-
-  # obj_fn = _objective_fn_parallel(_test_obj_fn())
-
-  ga = GA(
-    N=pop_size, information=information, options=options, p_mutation=p_mutation
-    # HUOM: N ehkä syytä olla == pop_size? Essentials of Metaheuristics vähän antais ymmärtää näin (Algorithm 32, sivu 45)
-    , selection=TournamentSelection(K=2, N=pop_size)
-    ## HOX: GenerationalReplacement ei vittu toimi jos tourn N>pop_size
-    # , environmental_selection=Metaheuristics.GenerationalReplacement()
-    , environmental_selection=Metaheuristics.ElitistReplacement()
-    # , termination=_Neverstop()
-    , termination=termination
-  )
-
-  num_bits = _test_parser_bits_required_dyn()
-  obj_fn = create_obj_fn(
-    parser
-    , full_data_generator(_test_wanted_output_rastr(10,0.19))
-    , input_based_result_gen()
-    , create_fitness_fn()
-  )
-
-    foreach(with_indivs) do indiv
-      Metaheuristics.set_user_solutions!(ga, indiv, obj_fn)
-    end
-
-  Metaheuristics.optimize(_obj_fn_to_parallel(obj_fn), BitArraySpace(num_bits), ga)
-end
-
-function get_best_at(fn, opt_result)
-  all_fitnesses = Folds.map(fn, map(x -> x.x, opt_result.population))
-  _min = minimum(all_fitnesses)
-  best_idx = findfirst(≈(_min), all_fitnesses)
-  opt_result.population[best_idx].x
-end
-
-export get_best_at

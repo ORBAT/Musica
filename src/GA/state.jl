@@ -97,22 +97,23 @@ end
 @inline _get_rng(o::Options) = get_or_else(o.rng, Random.default_rng())
 
 @auto_hash_equals mutable struct State{N,GenomeType<:AbstractArray,O<:Options}
+  const options::O
+
   genomes::SizedVector{N,GenomeType}
   # _decoded_genomes::SizedVector{N, Decoded}
   fitnesses::SizedVector{N,Float64}
 
-  options::O
 
   generation::Int
 
   best_solution_idx::Int
   n_better_than_parents::Int
 
+  # _initialized=true kun 
   _initialized::Bool
 
   function State{N,GenomeType}(opts::O) where {N,GenomeType<:AbstractArray,O<:Options}
-    s = new{N,GenomeType,O}()
-    s.options = opts
+    s = new{N,GenomeType,O}(opts)
     s.generation = 0
     s.best_solution_idx = -1
     s.n_better_than_parents = 0

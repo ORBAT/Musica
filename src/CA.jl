@@ -1,4 +1,4 @@
-using Transducers, StaticArrays, TestItems, Test, Printf
+using Transducers, StaticArrays, TestItems, Printf
 
 
 const _SizedTypes{Len,T} = Union{StaticVector{Len,T},SizedVector{Len,T}}
@@ -239,10 +239,6 @@ end
   @inferred(ca_b3(state_b3))
 end
 
-@inline bits_needed(number_length, base) = ceil(Int, number_length * log2(base))
-
-
-
 """
     undigits(d, base=2)
 
@@ -271,7 +267,7 @@ function undigits(d::Union{AbstractArray,Tuple}, base=2)
       return UInt(0)
     end
 
-    @assert bits_needed(d_len, base) ≤ 64 "undigits only returns UInt64 for now"
+    @assert _bits_needed(d_len, base) ≤ 64 "undigits only returns UInt64 for now"
   end
 
   (s, b) = (UInt(0), UInt(base)) #promote(zero(Base.eltype(d)), base)
@@ -282,6 +278,12 @@ function undigits(d::Union{AbstractArray,Tuple}, base=2)
   end
   s
 end
+
+@inline _bits_needed(number_length, base) = ceil(Int, number_length * log2(base))
+
+#=
+undigits(d; base = 10) = foldr((a, b) -> muladd(base, b, a), d, init=0)
+=#
 
 @testitem "undigits" begin
   @test undigits([0, 1, 1, 1, 1, 0, 0, 0]) == 0x000000000000001e
@@ -424,7 +426,7 @@ end
 export num_from_gray
 
 @inline row_to_number(r::Row{2}) = r |> undigits
-@inline row_to_number(r::Row{N}) where {N} = r |> @£(undigits(N))
+@inline row_to_number(r::Row{N}) where {N} = r |> @< undigits(N)
 
 export row_to_number
 
@@ -439,7 +441,7 @@ export row_from_gray
 
 export num_to_gray
 
-@inline num_to_gray_row(x, w::Type{Val{width}}) where {width} = x |> num_to_gray |> @£ num_to_row(w)
+@inline num_to_gray_row(x, w::Type{Val{width}}) where {width} = x |> num_to_gray |> @< num_to_row(w)
 @inline num_to_gray_row(x, width::Int) = num_to_gray_row(x, Val{width})
 @inline num_to_gray_row(x) = num_to_gray_row(x, Val{16})
 
@@ -453,7 +455,7 @@ export num_to_gray_row
   @test num_to_gray_row(12, row_width) == num_to_row(10, row_width)
 end
 
-function _stacktrace(top_n, remove_first=5)
-  trace = stacktrace()[remove_first:end]
+function _stacktrace(top_n, remove_first=4)
+  trace = stacktrace()[remove_first+1:end]
   trace[1:min(length(trace), top_n)]
 end

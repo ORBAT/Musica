@@ -1,5 +1,5 @@
 using ..Musica
-using Transducers, TestItems, Test, Parameters
+using Transducers, TestItems, Parameters
 
 #=
 # NOTE: genomin mietintää
@@ -101,17 +101,17 @@ Good luck with your project! This kind of interdisciplinary work can be challeng
 =#
 
 
-const default_genome_codon_length::Integer = 6
-const default_genome_redundant_per_codon::Integer = 2
-const default_max_codons::Integer = 400
+const default_genome_codon_length::Int = 6
+const default_genome_redundant_per_codon::Int = 2
+const default_max_codons::Int = 400
 
 """
 HUOM: `ElemType` on yksittäisen "emäksen" tyyppi. Kun `NStates` == 2 niin defaultti on `Bool`
 """
 @with_kw struct GenomeOptions{ElemType,CodonLen,NRedundant,NStates}
     # kuinka monta "basea" genomissa on. Binäärikamassa num_states == 2. DNA:ssa num_states = 4 (A, C, G, T)
-    max_codons::Integer = default_max_codons
-    min_codons::Integer = 3
+    max_codons::Int = default_max_codons
+    min_codons::Int = 3
 
     function GenomeOptions{ElemType,CodonLen,NRedundant,NStates}(
         max_codons,

@@ -1,4 +1,4 @@
-using Transducers, TestItems, Test, MacroTools
+using Transducers, TestItems, MacroTools
 
 """
     repeated(fn, times)
@@ -49,12 +49,12 @@ struct BoundCall{InitArgPos<:ArgPos,InitArg,F<:Function,KW} <: Function
 
   _str::String
 
-  function BoundCall{InitArgPos}(f::F, _str::String, x; kwargs...) where {InitArgPos,F}
-    new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs, _str)
+  function BoundCall{InitArgPos}(f::F, str_representation::String, x; kwargs...) where {InitArgPos,F}
+    new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs, str_representation)
   end
 
-  function BoundCall{InitArgPos}(f::F, _str::String, x...; kwargs...) where {InitArgPos,F}
-    new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs, _str)
+  function BoundCall{InitArgPos}(f::F, str_representation::String, x...; kwargs...) where {InitArgPos,F}
+    new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs, str_representation)
   end
 end
 
@@ -94,7 +94,7 @@ const _emptyKW = pairs((;))
   using Musica: BoundCall, ArgHead, ArgTail
   fn(a, b; c=3, d) = a / (b - c)d
 
-  let bfn = BoundCall{ArgHead}(fn,"fn", 1)
+  let bfn = BoundCall{ArgHead}(fn, "fn", 1)
     @test bfn(2; d=4) == fn(1, 2; d=4)
     @test bfn(2; c=30, d=40) == fn(1, 2; c=30, d=40)
   end
@@ -147,20 +147,13 @@ KYS: miks toi herjaa kun taas `const _BoundCallHeadTup = _BoundCallHead{InitArgs
 
 """
 
-macro ©(ex)
-  _bound(ex, :BindHead)
-end
 
 """
-    @> fn(a)
-    @> fn(a, b)
-    @> fn(a; kw=1)
+    bound = @> fn(a,b)
+    bound(c, d) == fn(a, b, c, d)
 
-Bind a function call so that arguments are bound starting from the first (left). The argument must be a function call with at least one argument, and zero or more keyword arguments.
+Bind a function call (or other callable, such as a type) so that arguments are bound starting from the first (left). The argument must be a function call with at least one argument, and zero or more keyword arguments.
 
-    bound = @> fn(a,b); bound(c, d) == fn(a, b, c, d)
-
-See [`BoundCall`](@ref).
 
 ```jldoctest
 julia> a = 1; plus1 = @> +(a);
@@ -194,16 +187,15 @@ macro >(ex)
   _bound(ex, :BindHead)
 end
 
-macro £(ex)
-  _bound(ex, :BindTail)
-end
+export @>
+
 
 """
-@< fn(a)
-@< fn(a, b)
-@< fn(a; kw=1)
+    @< fn(a)
+    @< fn(a, b)
+    @< fn(a; kw=1)
 
-Bind a function call so that arguments are bound starting from the tail (right). The argument must be a function call with at least one argument, 
+Bind a function call (or other callable, such as a type) so that arguments are bound starting from the tail (right). The argument must be a function call with at least one argument, 
 and zero or more keyword arguments.
 
 ```jldoctest
@@ -223,6 +215,8 @@ macro <(ex)
   _bound(ex, :BindTail)
 end
 
+export @<
+
 function _stringify_arg(ex::Expr)
   # jos kw niin erillinen kw-stringify, muuten vaan string(ex)
   if ex.head === :kw
@@ -238,7 +232,6 @@ _stringify_args(::Nothing) = ""
 _stringify_args(args) = join(map(_stringify_arg, args), ",")
 _stringify_kws(kws) = ";" * _stringify_args(kws)
 _stringify_kws(::Nothing) = ""
-
 
 _stringify_unbound_param(::Type{ArgHead}, ::Nothing) = "_xs..."
 _stringify_unbound_param(::Type{ArgHead}, @nospecialize(args)) = ",_xs..."
@@ -275,36 +268,8 @@ function _bound(ex, argpos)
   end
 end
 
-"""
-    @x 2x # expands to x -> 2x
-
-```jldoctest
-julia> (@x 2x)(4)
-8
-```
-"""
-macro x(ex)
-  :($(esc(:x)) -> $(esc(ex)))
-end
-
 
 @testitem "macros" begin
-  # TODO FIXME: curry + UnionAll-tyypin tyyppiparametriton konstruktori
-  #= 
-    struct ZeroPadded{PadLen,E,T<:AbstractVector{E}} <: AbstractVector{E}
-      coll::T
-      _coll_len::Int
-      function ZeroPadded{PL,E,T}(coll) where {PL,E,T}
-        @info coll
-        @assert length(coll) ≤ PL "length(coll) $(length(coll)) wasn't ≤ PL ($PL)"
-        new{PL,E,T}(coll, length(coll))
-      end
-    end
-
-    ZeroPadded(a, n) = ZeroPadded{n,Base.eltype(a),typeof(a)}(a)
-
-    @test @<(ZeroPadded(4))([1,2]).coll == ZeroPadded([1,2], 4).coll =#
-
   fn(a, b; c, d=0) = (a - b) * (c + d)
 
   # pelkkä kw arg
@@ -316,6 +281,16 @@ end
   @test @>(fn(12))(2; c=5) == 50
   @test @>(fn(12, c=5))(2) == 50
   @test @>(fn(12; c=5))(2) == 50
+
+  # testaa että hommat toimii myös konstruktoreiden kanssa. `Dada(n)`ssä `Dada`n tyyppi on `UnionAll` eikä
+  # Function
+  struct Dada{A,B,C}
+    field::Int
+  end
+
+  Dada(v) = Dada{Int,Int,Int}(v)
+  @test (@> Dada(5))() == Dada{Int,Int,Int}(5)
+
 end
 
 @inline _stable_typeof(x) = typeof(x)

@@ -1,4 +1,4 @@
-using TestItems, Test, Transducers, StaticArrays, Revise, BenchmarkTools, StatsBase, StructArrays, Random
+using Transducers, StaticArrays, Revise, BenchmarkTools, StatsBase, StructArrays, Random
 
 # __enable_debug()
 

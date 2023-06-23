@@ -36,11 +36,11 @@ SSome(::Type{T}) where {T} = SSome{Type{T}}(T)
 
 @inline Base.iterate(@nospecialize(::TNothing), @nospecialize(i...)) = nothing
 
-@inline function Base.iterate(s::SSome{T})::Tuple{T, Integer} where {T}
+@inline function Base.iterate(s::SSome{T})::Tuple{T, Int} where {T}
     (s.value, 2)
 end
 
-@inline function Base.iterate(s::SSome{T}, i)::Union{Nothing, Tuple{T, Integer}} where {T}
+@inline function Base.iterate(s::SSome{T}, i)::Union{Nothing, Tuple{T, Int}} where {T}
   if i == 1
     (s.value, 2)
   end

@@ -72,12 +72,6 @@ end =#
 #   error("WIP")
 # end
 
-struct VarintParser end
-
-
-function parse_varint()
-  error("WIP")
-end
 
 # TODO: jotain näitä allaolevia mä varmaan tarviin, mut ehkä turha tehdä vielä ennen ku tiiän tarkalleen mitä haluun :P
 # Vaatinee genomin parempaa suunnittelua
@@ -440,7 +434,7 @@ function (e::Exact)(state::S) where {O,R,S<:State{O,R}}
   # end
 end
 
-# FIXME: parempi tyyppi <: Parser{???}
+# FIXME: parempi supertype <: Parser{???}
 # promote_typejoinin tulos olis hyvä
 struct Or{O,PA<:Parser,PB<:Parser} <: Parser{O}
   pa::PA
@@ -452,7 +446,7 @@ function Or(pa::PA, pb::PB) where {A,B,PA<:Parser{A},PB<:Parser{B}}
 end
 
 # _any käy läpi thunkkeja kunnes joku niistä palauttaa Success.
-# res oli thunk. Palautetaan thunk, jossa se resolvataan
+# p1 on thunk. Palautetaan thunk, jossa se resolvataan
 _any(p1::Function, ps::Function...) = () -> _any(p1(), ps...)
 # res oli Failure, kokeillaan loppuja thunkkeja
 _any(::Failure, ps::Function...) = () -> _any(ps...)
@@ -478,11 +472,9 @@ end
 
 # käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten seuraavalle.
 # vrt _first_of, jossa ei tarvii kuljettaa tota resulttia mukana, koska kaikki sille annettavat parserit saa saman inputin
-function _all(curr_res::Success, p::Parser, ps::Parser...)
-  _all(p(curr_res.state), ps...)
-end
+_all(curr_res::Success, p::Parser, ps::Parser...) = _all(p(curr_res.state), ps...)
 
-#jos eka arg on thunk, palauta thunk jossa kutsutaan _all_of resolvatulla arvolla
+#jos eka arg on thunk, palauta thunk jossa kutsutaan _all resolvatulla arvolla
 _all(s_thunk::Function, ps...) = () -> _all(s_thunk(), ps...)
 # ketjun viimeinen Success -> koko paska menee läpi
 _all(s::Success) = s
@@ -512,7 +504,7 @@ function (::UInts{NCodons})(s::S) where {NCodons,O,I,S<:State{O,I}}
 end
 
 """
-Parsii varinttejä. 
+Parsii varinttejä. Ei failaa koskaan: jos inputti on tyhjä (tai ekassakin kodonissa on eka bitti )
 
 HOX: käytännössä vaatii inputin muotoa `Vector{Vector{Int}}`
 """
@@ -521,6 +513,12 @@ struct Varints{MaxCodons} <: Parser{UInt} end
 
 function (::Varints{MaxCodons})(s::S) where {MaxCodons,O,I,S<:State{O,I}}
   inp = s.remaining_input
+
+  # first::AbstractArray{Int} = inp |> Take(1) |> collect
+  # if isempty(first)
+  #   return UInt(0)
+  # end
+
   keep = inp |> TakeWhile(_first_is_1) |> Take(MaxCodons) |> collect
   rest = inp |> Drop(length(keep))
   num::UInt = if isempty(keep)
@@ -555,17 +553,20 @@ end
 @testitem "Parsing.Varints" begin
   using Transducers
 
-  inp = Vector{Bool}[[1, 0, 1, 0], [1, 0, 1, 1], [1, 0, 0, 1], [0, 1, 1, 1], [1, 1, 1, 1]]
-  want2 = [0, 1, 0, 0, 1, 1] |> undigits
-  want3 = [0, 1, 0, 0, 1, 1, 0, 0, 1] |> undigits
+  let inp = Vector{Bool}[[1, 0, 1, 0], [1, 0, 1, 1], [1, 0, 0, 1], [0, 1, 1, 1], [1, 1, 1, 1]],
+    want2 = [0, 1, 0, 0, 1, 1] |> undigits,
+    want3 = [0, 1, 0, 0, 1, 1, 0, 0, 1] |> undigits
 
+    @test Parsing.execute(Parsing.Varints{2}(), inp) ==
+          Parsing.Success(Parsing.State(want2, [[1, 0, 0, 1], [0, 1, 1, 1], [1, 1, 1, 1]]))
 
-  @test Parsing.execute(Parsing.Varints{2}(), inp) ==
-        Parsing.Success(Parsing.State(want2, [[1, 0, 0, 1], [0, 1, 1, 1], [1, 1, 1, 1]]))
+    @test Parsing.execute(Parsing.Varints{4}(), inp) ==
+          Parsing.Success(Parsing.State(want3, [[0, 1, 1, 1], [1, 1, 1, 1]]))
+  end
 
-  @test Parsing.execute(Parsing.Varints{4}(), inp) ==
-        Parsing.Success(Parsing.State(want3, [[0, 1, 1, 1], [1, 1, 1, 1]]))
-
+  let inp = Vector{Bool}[[0, 1, 1, 1], [1, 0, 1, 0]], want = UInt(0b111)
+    @test Parsing.execute(Parsing.Varints{2}(), inp) === Parsing.Success(Parsing.State(want, [[1,0,1,0]]))
+  end
 
   # let inp_flat = inp |> Cat() |> collect
   #   @test Parsing.execute(Parsing.UInts{12}(), inp_flat) ==
@@ -578,7 +579,7 @@ end
 _execute(res::Function) = _execute(res())
 _execute(res) = res
 
-function execute(p::Parser, s::State)
+function execute(p::Parser, s::State)::Result
   _execute(p(s))
 end
 
@@ -626,7 +627,6 @@ end
 end
 
 @testitem "Parsing.And" begin
-  using Test
   using Musica.Parsing: Success, State
   inp = Bool[1, 1, 0, 0]
   p1 = Parsing.Exact(Bool[1, 1])
