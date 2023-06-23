@@ -142,7 +142,7 @@ end
 export DiscreteCA
 
 @inline function Base.hash(a::DiscreteCA{N,R,RL}, h::UInt) where {N,R,RL}
-  hash(:DiscreteCA, h) |> @©(hash(N)) |> @©(hash(R)) |> @©(hash(a.rule))
+  hash(:DiscreteCA, h) |> @>(hash(N)) |> @>(hash(R)) |> @>(hash(a.rule))
 end
 
 @inline function Base.:(==)(a::DiscreteCA{N1,R1}, b::DiscreteCA{N2,R2}) where {N1,R1,N2,R2}
