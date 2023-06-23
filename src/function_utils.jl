@@ -42,7 +42,8 @@ const ArgHead = Val{:BindHead}
 const ArgTail = Val{:BindTail}
 const ArgPos = Union{ArgHead,ArgTail}
 
-struct BoundCall{InitArgPos<:ArgPos,InitArg,F<:Function,KW} <: Function
+# ks @< ja @>
+struct BoundCall{InitArgPos<:ArgPos,InitArg,F<:Base.Callable,KW} <: Function
   f::F
   arg::InitArg
   kw::KW
@@ -296,4 +297,37 @@ end
 @inline _stable_typeof(x) = typeof(x)
 @inline _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
-export @©, @£, @>, @<, @x
+const indent::String = "  "
+
+prettyprint_expr(e, level::Int=0) = prettyprint_expr(stdout, e, level)
+
+function prettyprint_expr(io::IO, e, level::Int=0)
+
+  lvl_indent = repeat(indent, level)
+  args_indent = repeat(indent, level + 1)
+  if isa(e, Expr)
+    print(io, "\n",lvl_indent,"Expr(:")
+    print(io, e.head, ", ")
+    # if e.head in (:if, :ifelse, :block)
+    #   print("\n", args_indent)
+    # end
+    first = true
+    for arg in e.args
+      if first
+        first = false
+      else
+        print(io, ", ")
+      end
+      prettyprint_expr(io, arg, level + 1)
+    end
+    print(io, ")")
+  elseif isa(e, Symbol)
+    print(io, ":", e)
+  elseif isa(e, QuoteNode)
+    print(io, "QuoteNode(")
+    prettyprint_expr(io, e.value)
+    print(io, ")")
+  else
+    print(io, e)
+  end
+end
