@@ -50,21 +50,6 @@ function Row{NS,L,T}(c::C) where {NS,L,T<:Signed,C}
 end
 
 
-@inline _condensed_str(coll::AbstractArray{Bool})::String = map(v -> v ? '1' : '0', coll) |> join
-@inline _condensed_str(coll::AbstractArray{<:Integer})::String = map(v -> '1' + (v - 1), coll) |> join
-
-function Base.show(io::IO, row::Row{NS,W,T}) where {NS,W,T<:Union{Bool,Unsigned}}
-  print(io, "Row{", NS, ",", W, ",", T, "}(", _condensed_str(row.coll), ")")
-end
-
-function Base.show(io::IO, row::Row{NS,W,T}) where {NS,W,T}
-  print(io, "Row{", NS, ",", W, ",", T, "}(", row.coll, ")")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", row::Row{NS,W}) where {NS,W}
-  show(io, row)
-end
-
 """
 Create a new `Row` from a `StaticVector` or a `SizedVector`.
 """
@@ -81,8 +66,20 @@ Create a new `Row` from any `AbstractArray` `c`. Checks that `c`'s length is equ
   Row{NStates,Len,T}(c)
 end
 
+@inline _condensed_str(coll::AbstractArray{Bool})::String = map(v -> v ? '1' : '0', coll) |> join
+@inline _condensed_str(coll::AbstractArray{<:Integer})::String = map(v -> '1' + (v - 1), coll) |> join
 
-@inline Row{NS}(coll::AbstractArray) where {NS} = Row{NS,length(coll)}(coll)
+function Base.show(io::IO, row::Row{NS,W,T}) where {NS,W,T<:Union{Bool,Unsigned}}
+  print(io, "Row{", NS, ",", W, ",", T, "}(", _condensed_str(row.coll), ")")
+end
+
+function Base.show(io::IO, row::Row{NS,W,T}) where {NS,W,T}
+  print(io, "Row{", NS, ",", W, ",", T, "}(", row.coll, ")")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", row::Row{NS,W}) where {NS,W}
+  show(io, row)
+end
 
 @inline Base.IndexStyle(::Type{Row{NS,L,T,C}}) where {NS,L,T,C} = Base.IndexStyle(C)
 
@@ -96,7 +93,6 @@ end
 
 @inline function Base.similar(r::Row{NStates,Len,T,C}) where {NStates,Len,T,C}
   c = similar(r.coll)
-  # @debug "Base.similar(Row) r.coll=$(typeof(r.coll)) c=$(typeof(c))"
   Row{NStates,Len}(c)
 end
 
@@ -228,7 +224,7 @@ end
 
 @testitem "evolution" begin
   using StaticArrays
-  state = Row{2}(BitVector([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+  state = Row{2,11}(BitVector([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
   ca = DiscreteCA{2}(110)
 
   @test ca(state) == [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
