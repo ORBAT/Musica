@@ -58,8 +58,6 @@ end
 
 
 function uniform_crossover(a::AbstractArray, b::AbstractArray; rng=Random.default_rng())
-  # FIXME: kommenttien yksityiskohdat on vähän vituillaan ku muokkasin lennossa, vois fiksaa
-
   # HOX! vanhemmalta saatujen bittien etäisyydet ei sais muuttua, koska epistaasi (ks essentials of metaheuristics p38). 
   # Se ratkaiseva "geenipatterni" voi olla 
   #     _ _ 1 _ 0 0 1 _ 0
@@ -79,14 +77,17 @@ function uniform_crossover(a::AbstractArray, b::AbstractArray; rng=Random.defaul
   else
     (b, b_len, a, a_len)
   end
+  # shorter = b, longer = a
 
-  # kun toisen roundaa ylös ja toisen alas, niin jos a_len==b_len ja pariton, ni offspring_len == a_len == b_len
+  # molemmat vanhemmat antaa puolet omasta genomistaan jälkeläiselle
+  # HUOM: kun toisen roundaa ylös ja toisen alas, niin jos a_len==b_len ja pariton, ni offspring_len == a_len == b_len
   n_bits_from_shorter = div(shorter_len, 2, RoundUp)
   # n_bits_from_shorter = 3
   n_bits_from_longer = div(longer_len, 2, RoundDown)
   # n_bits_from_longer = 4
+
   offspring_len = n_bits_from_shorter + n_bits_from_longer
-  # offspring_len = 8
+  # offspring_len = 7
 
   # indeksit, jotka lyhyemmästä tulee mukaan jälkeläiseen
   shorter_mask = StatsBase.sample(rng, 1:shorter_len, n_bits_from_shorter; replace=false, ordered=true)
@@ -97,36 +98,32 @@ function uniform_crossover(a::AbstractArray, b::AbstractArray; rng=Random.defaul
   #   ^         ^         ^
   #
   # shorterin sapluuna on yhteensä 5 pitkä (kun laskee "tyhjät välit" mukaan), eli se mahtuu alkamaan jälkeläisessä indekseiltä
-  # 1: [s, _, s, _, s, _, _, _]
-  # 2: [_, s, _, s, _, s, _, _]
-  # 3: [_, _, s, _, s, _, s, _]
-  # 4: [_, _, _, s, _, s, _, s]
-  # start_idx = rand(1:(offspring_len-shorter_mask_len)+1)
-  # start_idx = rand(1:(8-5)+1)
-  # start_idx = 3
+  # 1: [s, _, s, _, s, _, _]
+  # 2: [_, s, _, s, _, s, _]
+  # 3: [_, _, s, _, s, _, s]
 
-  # nyt sitä sapluunaa pitää shiftata sen verran että se alkaa halutusta kohdasta.
-  #
+  # Arvotaan shorterin sapluunalle satunnainen alkukohta tolle välille, ja "shiftataan" sen indeksit tän alkukohdan mukaisesti.
   # Nää on sit ne _jälkeläisen_ bitti-indeksit jotka tulee shorterilta. Järjestys ja numeroiden suhteellinen paikka säilyy, 
   # shorter_mask vaan siirtyy
-  # idxs_from_shorter = shorter_mask .+ shorter_mask_offset
-  idxs_from_shorter = _randomize_mask_position(shorter_mask, offspring_len, rng)
-  # idxs_from_shorter = [3, 5, 7]
+  offspring_idxs_from_shorter = _randomize_mask_position(shorter_mask, offspring_len, rng)
+  # _randomize_mask_position arpoi alkuindeksiksi 3:n, lopputulos on:
+  # offspring_idxs_from_shorter = [3, 5, 7]
 
-  # Me tiedetään että ne bitit jotka ei tullu shorterilta, tulee pakostakin sit longerilta. 
-  # idxs_from_shorter:in komplementti, eli siis _jälkeläisen_ indeksit jotka tulee longerilta. Tää ottaa rangesta 1:offspring_len kaikki,
-  # jotka ei löydy idxs_from_shorter:ista.
-  idxs_from_longer = findall((!in).(1:offspring_len, (idxs_from_shorter,)))
-  # idxs_from_longer = [1, 2, 4, 6, 8]
+  # Me tiedetään että ne bitit jotka ei tullu shorterilta, tulee pakostakin sit longerilta.
+  # Tää on offspring_idxs_from_shorter:in komplementti, eli siis _jälkeläisen_ indeksit jotka tulee longerilta. 
+  # Ottaa rangesta 1:offspring_len kaikki, jotka ei löydy offspring_idxs_from_shorter:ista.
+  offspring_idxs_from_longer = findall((!in).(1:offspring_len, (offspring_idxs_from_shorter,)))
+  # offspring_idxs_from_longer = [1, 2, 4, 6]
   #= NOTE:
     When broadcasting with in.(items, collection) or items .∈ collection, both item and collection are broadcasted over, which is often not what is intended. For example, if both arguments are vectors (and the dimensions match), the result is a vector indicating whether each value in collection items is in the value at the corresponding position in collection. To get a vector indicating whether each value in items is in collection, wrap collection in a tuple or a Ref like this: in.(items, Ref(collection)) or items .∈ Ref(collection).
   =#
 
-  # ja tehdään idxs_from_longer:ista maski longerille (nyt mentiin `offspring` idxs -> `longer` idxs, shorterin kanssa mentiin `shorter` idxs -> `offspring` idxs)
-  longer_mask = _randomize_mask_position(idxs_from_longer, longer_len, rng)
+  # ja tehdään offspring_idxs_from_longer:ista maski longerille (tässä mennään `offspring` idxs -> `longer` idxs, shorterin kanssa mentiin 
+  # `shorter` idxs -> `offspring` idxs)
+  longer_mask = _randomize_mask_position(offspring_idxs_from_longer, longer_len, rng)
   offspring = similar(shorter, offspring_len)
-  offspring[idxs_from_shorter] = shorter[shorter_mask]
-  offspring[idxs_from_longer] = longer[longer_mask]
+  offspring[offspring_idxs_from_shorter] = shorter[shorter_mask]
+  offspring[offspring_idxs_from_longer] = longer[longer_mask]
   offspring
 end
 
