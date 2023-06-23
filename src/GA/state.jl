@@ -16,7 +16,7 @@ struct Individual{GenomeType<:AbstractArray}
   fitness::Float64
 end
 
-function Base.show(io::IO, indiv::Individual{GT}) where {GT}
+function Base.show(io::IO, indiv::Individual)
   print(io, "Individual(")
   show(io, indiv.genome)
   @printf(io, ", %.5f)", indiv.fitness)

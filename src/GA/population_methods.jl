@@ -25,11 +25,13 @@ function _tournament_select_with_one_tournament(individuals::AbstractArray{T}, :
 end
 
 function tournament_select_two(individuals::AbstractArray{T}; tournament_size, rng)::NTuple{2,T} where {T}
-  parent_a_idx = _tournament_select_idx(individuals; tournament_size, rng)
-  parent_b_idx = _tournament_select_idx(individuals; tournament_size, rng)
+  n_indivs = length(individuals)
+  parent_a_idx = _tournament_select_idx(n_indivs, tournament_size, rng)
+  parent_b_idx = _tournament_select_idx(n_indivs, tournament_size, rng)
   while (parent_a_idx == parent_b_idx)
-    parent_b_idx = _tournament_select_idx(individuals; tournament_size, rng)
+    parent_b_idx = _tournament_select_idx(n_indivs, tournament_size, rng)
   end
+  # HOX: palauttaa fitness-järjestyksessä, paras ensin
   @inbounds individuals[min(parent_a_idx, parent_b_idx)], individuals[max(parent_a_idx, parent_b_idx)]
 end
 
@@ -40,8 +42,8 @@ end
 #   @inbounds individuals[idxs[1]]
 # end
 
-function _tournament_select_idx(individuals::AbstractArray{T}; tournament_size, rng) where {T}
-  idxs = StatsBase.sample(rng, 1:length(individuals), tournament_size; replace=false, ordered=true)
+function _tournament_select_idx(max_idx, tournament_size, rng)
+  idxs = StatsBase.sample(rng, 1:max_idx, tournament_size; replace=false, ordered=true)
   @inbounds idxs[1]
 end
 
@@ -56,7 +58,7 @@ end
 
 
 
-
+# TODO: "virallisesti" crossoverin pitäis palauttaa tietty kaks childiä
 function uniform_crossover(a::AbstractArray, b::AbstractArray; rng=Random.default_rng())
   # HOX! vanhemmalta saatujen bittien etäisyydet ei sais muuttua, koska epistaasi (ks essentials of metaheuristics p38). 
   # Se ratkaiseva "geenipatterni" voi olla 
@@ -72,6 +74,7 @@ function uniform_crossover(a::AbstractArray, b::AbstractArray; rng=Random.defaul
   # a_len = 9
   b_len = length(b)
   # b_len = 5
+
   (shorter, shorter_len, longer, longer_len) = if a_len < b_len
     (a, a_len, b, b_len)
   else
@@ -133,7 +136,7 @@ HOX: olettaa että `indices` on little-endian järjestyksessä
 Base.@propagate_inbounds _mask_len(indices) = (indices[end] - indices[1]) + 1
 
 """
-`mask` shiftattuna satunnaisesti välille `1:max_index`
+Indeksi-`mask` shiftattuna satunnaisesti välille `1:max_index`, eli jokaiseen sen elementtiin lisätään joku offset
 """
 Base.@propagate_inbounds function _randomize_mask_position(mask, max_index, rng)
   mask_len = _mask_len(mask)
