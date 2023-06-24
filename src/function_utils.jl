@@ -359,8 +359,21 @@ function wrapperize(expr::Expr)
 end
 
 """
+    (@Fn Vector{Bool} -> UInt)(undigits)
+
+Palauttaa FunctionWrapper-konstruktorin funktioille, joilla on annettu tyyppi.
+
 Lähde: https://discourse.julialang.org/t/can-functionwrappers-jl-express-higher-order-functions/66404/4
 """
-macro fn(expr)
+macro Fn(expr)
   wrapperize(expr)
+end
+
+export @Fn
+
+@testitem "@Fn" begin
+  using Test
+  let T = @Fn((Vector{Bool}) -> UInt), fn = T(@<(undigits(2)))
+    @inferred fn([1,1,1])
+  end
 end
