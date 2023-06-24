@@ -49,80 +49,6 @@ function ((p::Parser{T})(inp::EductionOrArray)::Tuple{EductionOrArray,EductionOr
   input_left, output, get_or_else(maybe_ok, true)
 end
 
-
-## TODO: ei ehkä tarvetta?
-#= function ((p::Parser{T})((input_left::EductionOrArray, output::EductionOrArray, ok::Bool))::Tuple{EductionOrArray,EductionOrArray,Bool}) where T
-  error("WIP")
-#=  (input_left, output, maybe_ok...) = inp |> p.fn
- input_left, output, get_or_else(maybe_ok, true) =#
-end =#
-
-# function (curr::Parser{T})(previous_parser::Parser{K}) where {T,K}
-#     NewT = Base.promote_typejoin(T,K)
-#     Parser(NewT) do inp
-#     inp_left, prev_outp, ok = inp |> previous_parser
-#     if !ok
-#       return inp, (prev_outp, nothing), ok
-#     end
-
-#     input_rest, curr_outp::T, ok = curr(inp_left)
-#     input_rest, (prev_outp, Some(curr_outp)),rm  ok
-#   end
-
-#   error("WIP")
-# end
-
-
-# TODO: jotain näitä allaolevia mä varmaan tarviin, mut ehkä turha tehdä vielä ennen ku tiiän tarkalleen mitä haluun :P
-# Vaatinee genomin parempaa suunnittelua
-
-#= """
-Return a parser that first parses input with `a`, then gives any leftover bits to `b`. If either parser returns `nothing`, consumes no input
-and returns `(bits, nothing)`.
-"""
-function Base.:+(a::Parser, b::Parser)
-  Parser() do bits
-    bitsleft, a_result = a(bits)
-    @_return_if_nothing a_result bits
-    bitsleft, b_result = b(bitsleft)
-    @_return_if_nothing b_result bits
-    bitsleft, (a_result, b_result)
-  end
-end
-
-function Base.:|(a::Parser, b::Parser)
-  error("WIP")
-end
-
-
-@testitem "Parser" begin
-  using Transducers
-  parse_ones(n) = Musica.Parser() do input
-    got_ones = (input |> Take(n) |> collect) == ones(Int, n) ? :has_ones : nothing
-    bitsleft = input
-    if !isnothing(got_ones)
-      bitsleft = input |> Drop(n) |> collect
-    end
-    bitsleft, got_ones
-  end
-
-  parse_zeros(n) = Musica.Parser() do input
-    got_zeros = (input |> Take(n) |> collect) == zeros(Int, n) ? :has_zeros : nothing
-    bitsleft = input
-    if !isnothing(got_zeros)
-      bitsleft = input |> Drop(n) |> collect
-    end
-    bitsleft, got_zeros
-  end
-
-  @test (parse_ones(2) + parse_zeros(2))([1,1,0,0]) == ([], (:has_ones, :has_zeros))
-  @test (parse_ones(2) + parse_zeros(2))([1,1,1,1]) == ([1,1,1,1], nothing)
-  @test (parse_ones(2) + parse_zeros(2))([0,0,1,1]) == ([0,0,1,1], nothing)
-  @test Musica.Parser(identity)([1, 1]) == [1, 1]
-
-end
- =#
-
 function parse_n_bits(input, n_bits)
   (input |> Drop(n_bits) |> collect, undigits(input |> Take(n_bits) |> collect))
 end
@@ -176,41 +102,8 @@ function parser(::Type{T}) where {T}
   error("No parser registered for ", T)
 end
 
-# TODO: varints
-#=
 
-## sovella näitä
-
-function readvarint(io::IO, ::Type{T}) where {T<:Integer}
-    o = zero(T)
-    n = 0
-    b = UInt8(0x80)
-    while (b & UInt8(0x80)) ≠ 0
-        b = read(io, UInt8)
-        o |= convert(T, b & 0x7f) << 7n
-        n += 1
-    end
-    o
-end
-
-function writevarint(io::IO, x::Integer)
-    n = 0
-    c = true
-    while c
-        b = x & 0x7f
-        if (x >>>= 7) ≠ 0
-            b |= 0x80
-        else
-            c = false
-        end
-        n += write(io, UInt8(b))
-    end
-    n
-end
-
-
-=#
-
+###########################################################################################
 module Parsing
 
 using ..Musica
@@ -452,7 +345,7 @@ _any(p1::Function, ps::Function...) = () -> _any(p1(), ps...)
 _any(::Failure, ps::Function...) = () -> _any(ps...)
 
 # res oli Success -> katkastaan "ketju" ja palautetaan resultti
-_any(res::Success, @nospecialize(ps...)) = res
+_any(res::Success, @nospecialize(ps...)) = () -> res
 
 # loppu thunkit kesken -> fail
 _any() = Failure()
@@ -477,9 +370,9 @@ _all(curr_res::Success, p::Parser, ps::Parser...) = _all(p(curr_res.state), ps..
 #jos eka arg on thunk, palauta thunk jossa kutsutaan _all resolvatulla arvolla
 _all(s_thunk::Function, ps...) = () -> _all(s_thunk(), ps...)
 # ketjun viimeinen Success -> koko paska menee läpi
-_all(s::Success) = s
+_all(s::Success) = () -> s
 # Failure missä tahansa kohtaa ketjua -> fail
-_all(::Failure, @nospecialize(ps...)) = Failure()
+_all(::Failure, @nospecialize(ps...)) = () -> Failure()
 
 
 function (a::And)(s::State)
@@ -579,16 +472,16 @@ end
 _execute(res::Result) = res
 
 # FIXME: runtime calls koska thunk reassignataan ja res voi olla mitä sattuu
-function _execute(thunk::F)::Result where {F<:Function}
-  while true
-    let res = thunk()
-      if res isa Result
-        return res
-      end
-      thunk = res
-    end
-  end
-end
+# function _execute(thunk::F)::Result where {F<:Function}
+#   while true
+#     let res = thunk()
+#       if res isa Result
+#         return res
+#       end
+#       thunk = res
+#     end
+#   end
+# end
 
 function execute(p::Parser, s::State)::Result
   _execute(p(s))
@@ -638,26 +531,26 @@ end
 end
 
 @testitem "Parsing.And" begin
-  using Musica.Parsing: Success, State
+  using Musica.Parsing: Success, Failure, State, execute
   inp = Bool[1, 1, 0, 0]
   p1 = Parsing.Exact(Bool[1, 1])
   p2 = Parsing.Exact(Bool[0, 0])
 
   let s = State{Vector{Bool},Vector{Bool}}(nothing, inp)
-    @test Parsing.execute(Parsing.And(p1, p2), s) ==
+    @test execute(Parsing.And(p1, p2), s) ==
           Success(State((Bool[1, 1], Bool[0, 0]), Any[]))
 
-    let out = Parsing.execute(Parsing.And(p1, p2), s)
-      @test out isa Parsing.Success
+    let out = execute(Parsing.And(p1, p2), s)
+      @test out isa Success
       @test typeof(Musica.maybe_collect(out.state.output)) == SSome{Tuple{Vector{Bool},Vector{Bool}}}
     end
   end
 
   # execute shortcut joka muuttaa inp:n stateksi
-  @test Parsing.execute(Parsing.And(p1, p2), inp) == Success(State((Bool[1, 1], Bool[0, 0]), Any[]))
+  @test execute(Parsing.And(p1, p2), inp) == Success(State((Bool[1, 1], Bool[0, 0]), Any[]))
 
   let s = State(Bool[], Bool[1, 1, 1, 0])
-    @test Parsing.execute(Parsing.And(p1, p2), s) == Parsing.Failure()
+    @test execute(Parsing.And(p1, p2), s) == Failure()
   end
 
 
