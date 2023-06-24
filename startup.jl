@@ -1,4 +1,4 @@
-using Transducers, StaticArrays, BenchmarkTools, StatsBase, StructArrays, Random, JET, Cthulhu
+using Transducers, StaticArrays, BenchmarkTools, StatsBase, StructArrays, Random, JET, Cthulhu, MacroTools
 
 # __enable_debug()
 
