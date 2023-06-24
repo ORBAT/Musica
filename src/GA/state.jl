@@ -56,8 +56,9 @@ end =#
 
 
   objective_fn::ObjFn
-  # FIXME: tyypitys! Ei jaksais taas uutta parametria
-  rng::Optional{Xoshiro} = nothing
+  # HOX: Union on ilm usein parempi vaihtoehto ku abstraktin tyypin käyttäminen, koska union splitting 
+  #  https://julialang.org/blog/2018/08/union-splitting/
+  rng::Union{SSome{Xoshiro}, TNothing{Xoshiro}} = nothing
 end
 
 Options(go, mo, obj_fn, rng) = Options{typeof(go),Core.Typeof(obj_fn)}(go, mo, obj_fn, rng)
