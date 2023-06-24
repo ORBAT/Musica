@@ -309,7 +309,6 @@ function sprettyprint_expr(e)
 end
 
 function prettyprint_expr(io::IO, e, level::Int=0)
-
   lvl_indent = repeat(indent, level)
   args_indent = repeat(indent, level + 1)
   if isa(e, Expr)
@@ -338,6 +337,8 @@ function prettyprint_expr(io::IO, e, level::Int=0)
     print(io, e)
   end
 end
+
+export prettyprint_expr, sprettyprint_expr
 
 # HUOM: wrapperize base case. 
 wrapperize(x) = esc(x)
