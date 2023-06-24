@@ -86,7 +86,7 @@ end
 @inline function Base.similar(r::Row{NStates,Len,T,C}) where {NStates,Len,T,C<:SizedVector}
   # TODO FIXME: tää riippuu SizedVectorin sisuskaluista. Jos tätä kikkailua ei tee, niin BitVectorin kanssa lopputulos on
   # SizedVector{Len, Bool, Vector{Bool}} eikä SizedVector{Len, Bool, BitVector}
-  c = similar(r.coll.data)
+  c = similar(Base.parent(r.coll))
   # @debug "Base.similar(Row) with SizedVector r.coll=$(typeof(r.coll)) c=$(typeof(c))"
   Row{NStates}(SizedVector{Len}(c))
 end
