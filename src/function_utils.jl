@@ -1,4 +1,5 @@
 using Transducers, TestItems, MacroTools
+using FunctionWrappers: FunctionWrapper
 
 """
     repeated(fn, times)
@@ -330,4 +331,28 @@ function prettyprint_expr(io::IO, e, level::Int=0)
   else
     print(io, e)
   end
+end
+
+
+wrapperize(x) = esc(x)
+
+function wrapperize(expr::Expr)
+  if expr.head == :block
+    return Expr(:block, wrapperize.(expr.args)...)
+  elseif expr.head == :tuple
+    return Expr(:tuple, wrapperize.(expr.args)...)
+  elseif @capture(expr, (inputs__,) -> output_)
+    return :(FunctionWrapper{$(wrapperize(output)),Tuple{$(wrapperize.(inputs)...)}})
+  elseif @capture(expr, (input_) -> output_)
+    return :(FunctionWrapper{$(wrapperize(output)),Tuple{$(wrapperize(input))}})
+  else
+    error("I can only handle expressions of the form `(inputs...) -> output`")
+  end
+end
+
+"""
+Lähde: https://discourse.julialang.org/t/can-functionwrappers-jl-express-higher-order-functions/66404/4
+"""
+macro fn(expr)
+  wrapperize(expr)
 end
