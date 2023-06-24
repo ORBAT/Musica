@@ -1,4 +1,4 @@
-using Transducers, StaticArrays, Revise, BenchmarkTools, StatsBase, StructArrays, Random
+using Transducers, StaticArrays, BenchmarkTools, StatsBase, StructArrays, Random, JET, Cthulhu
 
 # __enable_debug()
 
@@ -46,3 +46,4 @@ test_can = CANeuron{2,16}(test_ca, n_generations)
 test_can2 = CANeuron{2,16}(test_ca2, Int(floor(n_generations/2)))
 
 test_stack = CANeuronStack{2,2,16}(test_can,test_can2)
+
