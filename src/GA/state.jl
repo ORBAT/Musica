@@ -280,7 +280,7 @@ function optimize() end
   rng() = Xoshiro(666)
   function obj_fn(genome)
     # HOX: varmistaa että genomi oikeesti on muotoa [(1,0,1,0), (1,1,1,1), ...]
-    _g::AbstractArray{AbstractArray} = genome |> collect
+    _g::Vector{Vector{Int}} = genome |> collect
 
     _sum = (_g |> Iterators.flatten |> sum)
     (42 - _sum)^2
