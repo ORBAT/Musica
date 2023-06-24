@@ -2,7 +2,7 @@
 
 julia_version = "1.9.1"
 manifest_format = "2.0"
-project_hash = "23c2506669129c3f4ad1dc8a0ad9939607230279"
+project_hash = "922afbf6c25f5292a52eca60ad2fa1849ae05a84"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -1150,6 +1150,14 @@ deps = ["MacroTools"]
 git-tree-sha1 = "dbe7e09d86545b2e78b9307559f2560744f34db4"
 uuid = "bfecab0d-fd4d-5014-a23f-56c5fae6447a"
 version = "0.3.3"
+
+[[deps.Rematch2]]
+deps = ["MacroTools", "OrderedCollections"]
+git-tree-sha1 = "f074465649393958e557ebf5e1f203ea8d64d6a4"
+repo-rev = "main"
+repo-url = "https://github.com/JuliaServices/Rematch2.jl"
+uuid = "351a7294-9038-49b6-b9cf-e076b05af63f"
+version = "0.2.8"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
