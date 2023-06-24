@@ -138,7 +138,7 @@ end
 @inline get_or_else(::TNothing{T}, fallback::T) where {T} = fallback
 # HUOM: @nospecialize(_fallback) koska sitä arvoa ei koskaan käytetä, niin turha kääntää sen eri 
 # tyypeille versioita
-@inline get_or_else(v::T, @nospecialize(_fallback)) where {T} = @inline get_value(v)
+@inline get_or_else(v::SSome{T}, @nospecialize(_fallback)) where {T} = get_value(v)
 
 @inline issomething(x::T) where {T} = !isnothing(x) && x != ()
 
