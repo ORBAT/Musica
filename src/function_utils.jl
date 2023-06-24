@@ -302,6 +302,12 @@ const indent::String = "  "
 
 prettyprint_expr(e, level::Int=0) = prettyprint_expr(stdout, e, level)
 
+function sprettyprint_expr(e)
+  io = IOBuffer()
+  prettyprint_expr(io, e)
+  io |> take! |> String
+end
+
 function prettyprint_expr(io::IO, e, level::Int=0)
 
   lvl_indent = repeat(indent, level)
@@ -333,7 +339,7 @@ function prettyprint_expr(io::IO, e, level::Int=0)
   end
 end
 
-
+# HUOM: wrapperize base case. 
 wrapperize(x) = esc(x)
 
 function wrapperize(expr::Expr)
@@ -345,8 +351,10 @@ function wrapperize(expr::Expr)
     return :(FunctionWrapper{$(wrapperize(output)),Tuple{$(wrapperize.(inputs)...)}})
   elseif @capture(expr, (input_) -> output_)
     return :(FunctionWrapper{$(wrapperize(output)),Tuple{$(wrapperize(input))}})
+  elseif @capture(expr, T_{Args__})
+    return esc(expr)
   else
-    error("I can only handle expressions of the form `(inputs...) -> output`")
+    error("I can only handle expressions of the form `(inputs...) -> output`, got $(expr|>Base.remove_linenums!)")
   end
 end
 
