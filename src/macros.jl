@@ -28,3 +28,46 @@ export @forward
 macro _return_if_nothing(ex, varname)
   :(if isnothing($(esc(ex))) return $(esc(varname)), nothing; end)
 end
+
+
+const _prettyprint_indent::String = "  "
+
+prettyprint_expr(e, level::Int=0) = prettyprint_expr(stdout, e, level)
+
+function prettyprint_expr(io::IO, e, level::Int=0)
+  lvl_indent = repeat(_prettyprint_indent, level)
+  args_indent = repeat(_prettyprint_indent, level + 1)
+  if isa(e, Expr)
+    print(io, "\n",lvl_indent,"Expr(:")
+    print(io, e.head, ", ")
+    # if e.head in (:if, :ifelse, :block)
+    #   print("\n", args_indent)
+    # end
+    first = true
+    for arg in e.args
+      if first
+        first = false
+      else
+        print(io, ", ")
+      end
+      prettyprint_expr(io, arg, level + 1)
+    end
+    print(io, ")")
+  elseif isa(e, Symbol)
+    print(io, ":", e)
+  elseif isa(e, QuoteNode)
+    print(io, "QuoteNode(")
+    prettyprint_expr(io, e.value)
+    print(io, ")")
+  else
+    print(io, e)
+  end
+end
+
+function sprettyprint_expr(e)
+  io = IOBuffer()
+  prettyprint_expr(io, e)
+  io |> take! |> String
+end
+
+export prettyprint_expr, sprettyprint_expr

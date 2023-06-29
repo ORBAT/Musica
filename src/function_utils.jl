@@ -1,5 +1,5 @@
 using Transducers, TestItems, MacroTools
-using FunctionWrappers: FunctionWrapper
+using FunctionWrappers: FunctionWrapper as Fn
 
 """
     repeated(fn, times)
@@ -298,49 +298,8 @@ end
 @inline _stable_typeof(x) = typeof(x)
 @inline _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
-const indent::String = "  "
+@inline maps(fn::F) where {F <: Base.Callable} = @> map(fn)
 
-prettyprint_expr(e, level::Int=0) = prettyprint_expr(stdout, e, level)
-
-function sprettyprint_expr(e)
-  io = IOBuffer()
-  prettyprint_expr(io, e)
-  io |> take! |> String
-end
-
-function prettyprint_expr(io::IO, e, level::Int=0)
-  lvl_indent = repeat(indent, level)
-  args_indent = repeat(indent, level + 1)
-  if isa(e, Expr)
-    print(io, "\n",lvl_indent,"Expr(:")
-    print(io, e.head, ", ")
-    # if e.head in (:if, :ifelse, :block)
-    #   print("\n", args_indent)
-    # end
-    first = true
-    for arg in e.args
-      if first
-        first = false
-      else
-        print(io, ", ")
-      end
-      prettyprint_expr(io, arg, level + 1)
-    end
-    print(io, ")")
-  elseif isa(e, Symbol)
-    print(io, ":", e)
-  elseif isa(e, QuoteNode)
-    print(io, "QuoteNode(")
-    prettyprint_expr(io, e.value)
-    print(io, ")")
-  else
-    print(io, e)
-  end
-end
-
-export prettyprint_expr, sprettyprint_expr
-
-# HUOM: wrapperize base case. 
 wrapperize(x) = esc(x)
 
 function wrapperize(expr::Expr)
@@ -349,9 +308,9 @@ function wrapperize(expr::Expr)
   elseif expr.head == :tuple
     return Expr(:tuple, wrapperize.(expr.args)...)
   elseif @capture(expr, (inputs__,) -> output_)
-    return :(FunctionWrapper{$(wrapperize(output)),Tuple{$(wrapperize.(inputs)...)}})
+    return :(Fn{$(wrapperize(output)),Tuple{$(wrapperize.(inputs)...)}})
   elseif @capture(expr, (input_) -> output_)
-    return :(FunctionWrapper{$(wrapperize(output)),Tuple{$(wrapperize(input))}})
+    return :(Fn{$(wrapperize(output)),Tuple{$(wrapperize(input))}})
   elseif @capture(expr, T_{Args__})
     return esc(expr)
   else
@@ -361,8 +320,10 @@ end
 
 """
     (@Fn Vector{Bool} -> UInt)(undigits)
+    T = @Fn (Int -> Int) -> Bool
+    is_foo::@Fn Any -> Tuple{Bool, Float64} = […]
 
-Palauttaa FunctionWrapper-konstruktorin funktioille, joilla on annettu tyyppi.
+Palauttaa parametrisoidun funktiotyypin (`Fn`, lyhennetty `FunctionWrapper` koska mikä vitun järki on nimetä se `FunctionWrappers.FunctionWrapper`iksi). 
 
 Lähde: https://discourse.julialang.org/t/can-functionwrappers-jl-express-higher-order-functions/66404/4
 """
@@ -374,7 +335,23 @@ export @Fn
 
 @testitem "@Fn" begin
   using Test
+  using FunctionWrappers: FunctionWrapper
+  
   let T = @Fn((Vector{Bool}) -> UInt), fn = T(@<(undigits(2)))
     @inferred fn([1,1,1])
+    @test T == FunctionWrapper{UInt, Tuple{Vector{Bool}}}
   end
+
+  
+end
+
+@testitem "Inline struct with Ref" begin
+  using FunctionWrappers: FunctionWrapper
+  using Test
+  struct InlineRefStruct
+    x::Vector{Int}
+  end
+  f = @inferred FunctionWrapper{InlineRefStruct,Tuple{InlineRefStruct}}(identity)
+  v = InlineRefStruct([1, 2, 3])
+  @test @inferred(f(v)) === v
 end
