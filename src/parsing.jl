@@ -363,8 +363,10 @@ end
 
 @inline first_output_type(::Type{<:And{A}}) where {A} = A
 
-# käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten seuraavalle.
-# vrt _first_of, jossa ei tarvii kuljettaa tota resulttia mukana, koska kaikki sille annettavat parserit saa saman inputin
+# käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten
+# seuraavalle.
+# vrt _first_of, jossa ei tarvii kuljettaa tota resulttia mukana, koska kaikki sille annettavat parserit saa
+# saman inputin
 _all(curr_res::Success, p::Parser, ps::Parser...) = _all(p(curr_res.state), ps...)
 
 #jos eka arg on thunk, palauta thunk jossa kutsutaan _all resolvatulla arvolla
@@ -487,8 +489,8 @@ function execute(p::Parser, s::State)::Result
 end
 
 function execute(p::P, inp::In) where {Out,In,P<:Parser{Out}}
-  # HOX: kun State luodaan, sen outputin pitää vastata sitä mikä P:stä pullahtaa ekana ulos. Esim. And(p1, p2):ssa
-  # tää olis sit p1:n output-tyyppi
+  # HOX: kun State luodaan, sen outputin pitää vastata sitä mikä P:stä pullahtaa ekana ulos. Esim. And(p1,
+  # p2):ssa tää olis sit p1:n output-tyyppi
   s = State{first_output_type(P),In}(nothing, inp)
   # @info "execute" s typeof(s)
   execute(p, s)
@@ -559,5 +561,4 @@ end
 
 
 end
-
 export Parsing
