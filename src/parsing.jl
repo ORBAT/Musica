@@ -472,16 +472,13 @@ end
 _execute(res::Result) = res
 
 # FIXME: runtime calls koska thunk reassignataan ja res voi olla mitä sattuu
-# function _execute(thunk::F)::Result where {F<:Function}
-#   while true
-#     let res = thunk()
-#       if res isa Result
-#         return res
-#       end
-#       thunk = res
-#     end
-#   end
-# end
+function _execute(thunk::F)::Result where {F<:Function}
+  res::Union{<:Function, Result} = thunk()
+  while res isa Function
+    res = res()
+  end
+  res
+end
 
 function execute(p::Parser, s::State)::Result
   _execute(p(s))
