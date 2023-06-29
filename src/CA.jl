@@ -1,4 +1,4 @@
-using Transducers, StaticArrays, TestItems, Printf
+using Transducers, StaticArrays, TestItems, Printf, ComputedFieldTypes
 
 
 const _SizedTypes{Len,T} = Union{StaticVector{Len,T},SizedVector{Len,T}}
@@ -84,9 +84,7 @@ end
 @inline Base.IndexStyle(::Type{Row{NS,L,T,C}}) where {NS,L,T,C} = Base.IndexStyle(C)
 
 @inline function Base.similar(r::Row{NStates,Len,T,C}) where {NStates,Len,T,C<:SizedVector}
-  # TODO FIXME: tää riippuu SizedVectorin sisuskaluista. Jos tätä kikkailua ei tee, niin BitVectorin kanssa lopputulos on
-  # SizedVector{Len, Bool, Vector{Bool}} eikä SizedVector{Len, Bool, BitVector}
-  c = similar(Base.parent(r.coll))
+  c = similar(parent(r.coll))
   # @debug "Base.similar(Row) with SizedVector r.coll=$(typeof(r.coll)) c=$(typeof(c))"
   Row{NStates}(SizedVector{Len}(c))
 end
@@ -96,8 +94,10 @@ end
   Row{NStates,Len}(c)
 end
 
+@inline Base.parent(r::Row) = r.coll
+
 """
-    Base.convert(::Type{Row{N,L,T,CS}}, x::Row{N,L,T,CM}) where {N,L,T,CS<:SVector{L,T},CM<:MVector{L,T}}
+    convert(Row{2,32,Bool,SVector{32,Bool}}, Row{2,32}(@MVector [1,1]))
 Convert a `Row` backed by a `MVector` to one backed by an `SVector`.
 """
 @inline function Base.convert(::Type{Row{N,L,T,CS}}, x::Row{N,L,T,CM}) where {N,L,T,CS<:SVector{L,T},CM<:MVector{L,T}}
@@ -123,19 +123,6 @@ end
 @forward Row.coll (Base.size, Base.getindex, Base.setindex!, Base.firstindex, Base.lastindex, Base.iterate,
   Base.length, Base.axes, Base.eltype, Base.IteratorSize, Base.IteratorEltype)
 
-struct DiscreteCA{NStates,Radius,RuleLen} <: Function
-  rule::UInt
-  rule_lookup::SVector{RuleLen,Int}
-
-  function DiscreteCA{NStates,Radius,RuleLen}(rule) where {NStates,Radius,RuleLen}
-    @assert 0 ≤ rule < (NStates^RuleLen)
-    _r = convert(UInt, rule)
-    @assert RuleLen == NStates^(2 * Radius + 1) "RuleLen must be NStates^(2 * Radius + 1)"
-    new(rule, rule_to_rule_lookup(_r, NStates, Radius))
-  end
-end
-
-export DiscreteCA
 
 @inline function Base.hash(a::DiscreteCA{N,R,RL}, h::UInt) where {N,R,RL}
   hash(:DiscreteCA, h) |> @>(hash(N)) |> @>(hash(R)) |> @>(hash(a.rule))
@@ -174,16 +161,16 @@ HOX TODO: pitää ehkä tehdä tästä myös mutatoiva versio. CANeuron ja CANeu
 @inline function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,L,State<:Row{NS,L}}
   # state wraps around at the ends
   ws = _wrap_state(state, RD)
-  # run ws through xf, fold it into a container that's similar to `state` 
+
   xf = _transducer(dca)
-  _ss = similar(state)
-  # @info "(dca)(state)" typeof(state) state typeof(_ss) _ss
-  _collect_into!(_ss, xf, ws)
+  new_state = similar(state)
+  # run ws through xf, fold it into a container that's similar to `state` 
+  _collect_into!(new_state, xf, ws)
 end
 
 "Feeds `foldable` into `xf` and collects the result into `dest`. Mutates `dest`"
 _collect_into!(dest, xf, foldable) =
-  foldl(xf |> Enumerate(), foldable; init=dest) do acc, (idx, a)
+  foldxl(xf ⨟ Enumerate(), foldable; init=dest) do acc, (idx, a)
     # folds xf into collection
     @inbounds acc[idx] = a
     acc
@@ -213,7 +200,7 @@ end
 - turns each neighborhood x into a number, uses that to index into the rule_lookup to get the result
 """
 @inline function _transducer(dca::T) where {T<:DiscreteCA}
-  Consecutive(Val{_neighborhood_size(T)}(), Val{1}()) |>
+  Consecutive(Val{_neighborhood_size(T)}(), Val{1}()) ⨟
   Map(@> _lookup_rule(dca))
 end
 
@@ -263,7 +250,7 @@ function undigits(d::Union{AbstractArray,Tuple}, base=2)
       return UInt(0)
     end
 
-    @assert _bits_needed(d_len, base) ≤ 64 "undigits only returns UInt64 for now"
+    # @assert _bits_needed(d_len, base) ≤ 64 "undigits only returns UInt64 for now"
   end
 
   (s, b) = (UInt(0), UInt(base)) #promote(zero(Base.eltype(d)), base)
