@@ -1,4 +1,4 @@
-using Transducers, StaticArrays, BenchmarkTools, StatsBase, StructArrays, Random, JET, Cthulhu, MacroTools
+using Transducers, StaticArrays, BenchmarkTools, StatsBase, StructArrays, Random, JET, Cthulhu, MacroTools, Musica
 
 # __enable_debug()
 
@@ -9,8 +9,8 @@ xf_printer(label) = Map() do x
   return x  # just return it as-is
 end
 
-includet("src/Musica.jl")
-using .Musica
+# includet("src/Musica.jl")
+# using .Musica
 
 function _track(m::Module, path::String)
   files = [filename for filename in readdir(path, join=true, sort=false) if splitext(filename)[2] === ".jl"]
@@ -20,8 +20,11 @@ function _track(m::Module, path::String)
   trk.(files)
 end
 
-_track(Musica, "src/")
-_track(Musica.GA, "src/GA")
+# _track(Musica, "src/")
+# _track(Musica.GA, "src/GA")
+
+# _track("src/")
+# _track("src/GA")
 
 function new_state(::Type{Val{L}}) where {L}
   let bla = zeros(Bool, L)
