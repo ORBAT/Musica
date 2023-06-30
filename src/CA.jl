@@ -53,16 +53,16 @@ end
 """
 Create a new `Row` from a `StaticVector` or a `SizedVector`.
 """
-@inline function Row{NStates}(c::C) where {NStates,Len,T,C<:_SizedTypes{Len,T}}
+function Row{NStates}(c::C) where {NStates,Len,T,C<:_SizedTypes{Len,T}}
   Row{NStates,Len,T}(c)
 end
 
 """
 Create a new `Row` from any `AbstractArray` `c`. Checks that `c`'s length is equal to `Len`
 """
-@inline function Row{NStates,Len}(c::C) where {NStates,Len,T,C<:AbstractArray{T}}
+function Row{NStates,Len}(c::C) where {NStates,Len,T,C<:AbstractArray{T}}
   # @debug "Row generic constr"
-  @assert length(c) == Len "length(c) ($(length(c))) != Len ($Len)"
+  @assert length(c) == Len
   Row{NStates,Len,T}(c)
 end
 
@@ -158,7 +158,7 @@ end
 
 HOX TODO: pitää ehkä tehdä tästä myös mutatoiva versio. CANeuron ja CANeuronStack tuottaa muuten aika paljon gorbagea
 """
-@inline function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,L,State<:Row{NS,L}}
+function (dca::DiscreteCA{NS,RD,RuL})(state::State)::State where {NS,RD,RuL,L,State<:Row{NS,L}}
   # state wraps around at the ends
   ws = _wrap_state(state, RD)
 
@@ -244,13 +244,13 @@ julia> undigits([])
 0x0000000000000000
 ```
 """
-function undigits(d::Union{AbstractArray,Tuple}, base=2)
+Base.@assume_effects :consistent :effect_free :terminates_locally function undigits(d::Union{AbstractArray,Tuple}, base=2)
   let d_len = length(d)
     if d_len == 0
       return UInt(0)
     end
 
-    # @assert _bits_needed(d_len, base) ≤ 64 "undigits only returns UInt64 for now"
+    @assert _bits_needed(d_len, base) ≤ 64 "undigits only returns UInt64 for now"
   end
 
   (s, b) = (UInt(0), UInt(base)) #promote(zero(Base.eltype(d)), base)
@@ -261,6 +261,8 @@ function undigits(d::Union{AbstractArray,Tuple}, base=2)
   end
   s
 end
+
+export undigits
 
 @inline _bits_needed(number_length, base) = ceil(Int, number_length * log2(base))
 
@@ -328,9 +330,6 @@ Please note that this code assumes that the digits in `x` are in descending orde
 
 =#
 
-
-export undigits
-
 """
     Musica.rule_to_rule_lookup(rule::UInt, nstates::Int = 2, radius::Int = 1)
 
@@ -381,7 +380,7 @@ Row{2,8,Bool}(11111100)
 ```
 """
 @inline function num_to_ones(n::Integer, ::Type{Val{L}})::Row{2,L} where {L}
-  @assert 0 ≤ n < L "n must be positive and smaller than L ($L), was $n"
+  @assert 0 ≤ n < L
   Row{2,L}([ones(Bool, n); zeros(Bool, L - n)])
 end
 
@@ -404,7 +403,7 @@ export num_to_row
   @test_throws AssertionError num_to_ones(256, Val{8})
 end
 
-@inline num_from_gray(n) = UInt(Integer(reinterpret(Gray64, n)))
+Base.@assume_effects :foldable @inline num_from_gray(n) = UInt(Integer(reinterpret(Gray64, n)))
 
 export num_from_gray
 
