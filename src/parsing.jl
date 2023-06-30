@@ -121,9 +121,9 @@ abstract type Parser{Out} <: Function end
 - `Out` on se minkä tyyppinen `output` on jos se on jotain muuta ku `nothing`. Outputin "pohjimmainen tyyppi"
 - `OT` on `output`-fieldin "käytännön" tyyppi, eli jotain `<: Optional{Out}`. Välttää sen että output olis abstrakti tyyppi
 - `In` on inputin "pohjimmainen tyyppi". Pitäis varmaan olla joku array tmv.
-- `IT` on  on joko `In` tai sit `Eduction`. Ts. tällä saa remaining_input:ista lazyn
+- `IT` on joko `In` tai sit iteraattori
 """
-struct State{Out,In,OT<:Optional{Out},IT<:Union{In,<:Eduction}}
+struct State{Out,In,OT<:Optional{Out},IT}
   output::OT
   remaining_input::IT
 
@@ -156,7 +156,7 @@ end
 
 function Base.:(==)(a::State, b::State)
   a.output == b.output &&
-    Musica.maybe_collect(a.remaining_input) == Musica.maybe_collect(b.remaining_input)
+    collect(a.remaining_input) == collect(b.remaining_input)
 end
 
 
@@ -164,7 +164,7 @@ function Base.show(io::IO, s::State{O,I}) where {O,I}
   print(io, "State{", I, " -> ", O, "} (")
   show(io, s.output)
   print(io, ", ")
-  show(io, Musica.maybe_collect(s.remaining_input))
+  show(io, collect(s.remaining_input))
   print(io, ")")
 end
 
@@ -297,16 +297,8 @@ end
 
 struct Failure <: Result end
 
-#=
-HUOM const fieldit mutable structeissa
-mutable struct Testi
-    const bleb::Int
-    bb::Int
-end
-=#
-
 """
-TODO: parseri / matcheri joka vaatii jonkun tarkan patternin, mutta ei lisää mitään outputtia Stateen
+parseri, joka vaatii tarkan patternin
 """
 struct Exact{T<:AbstractVector} <: Parser{T}
   pattern::T
@@ -317,14 +309,26 @@ function (e::Exact)(state::S) where {O,R,S<:State{O,R}}
     return Failure()
   end
   pat_len = length(e.pattern)
-  inp_rest = state.remaining_input |> Drop(pat_len)
-  got::R = state.remaining_input |> Take(pat_len) |> collect
+  inp_rest = Iterators.drop(state.remaining_input, pat_len)
+  got = Iterators.take(state.remaining_input, pat_len) |> collect
   if got == e.pattern
     Success(append_output(state, e.pattern, inp_rest))
   else
     Failure()
   end
-  # end
+end
+
+@testitem "Parsing.Exact" begin
+  let p = Parsing.Exact([1, 1])
+    @test Parsing.execute(p, [1, 1]) == Parsing.Success(Parsing.State([1, 1], []))
+    @test Parsing.execute(p, [1, 1, 0, 0]) == Parsing.Success(Parsing.State([1, 1], [0, 0]))
+    @test Parsing.execute(p, [0, 0]) == Parsing.Failure()
+  end
+
+  let p = Parsing.Exact([[1,1]])
+    @test Parsing.execute(p, [[1, 1]]) == Parsing.Success(Parsing.State([[1, 1]], []))
+    @test Parsing.execute(p, [[1, 1], [0,0]]) == Parsing.Success(Parsing.State([[1, 1]], [[0,0]]))
+  end
 end
 
 # FIXME: parempi supertype <: Parser{???}
@@ -338,20 +342,20 @@ function Or(pa::PA, pb::PB) where {A,B,PA<:Parser{A},PB<:Parser{B}}
   Or{Union{A,B},PA,PB}(pa, pb)
 end
 
-# _any käy läpi thunkkeja kunnes joku niistä palauttaa Success.
-# p1 on thunk. Palautetaan thunk, jossa se resolvataan
-_any(p1::Function, ps::Function...) = () -> _any(p1(), ps...)
-# res oli Failure, kokeillaan loppuja thunkkeja
-_any(::Failure, ps::Function...) = () -> _any(ps...)
+# _any käy läpi parsereita kunnes joku niistä palauttaa Success. Palauttaa thunkin, jossa p1(s) on resolvattu
+_any(s::State, p1::Function, ps::Function...) = () -> _any(s, p1(s), ps...)
 
-# res oli Success -> katkastaan "ketju" ja palautetaan resultti
-_any(res::Success, @nospecialize(ps...)) = () -> res
+# parseri palautti success --> katkastaan "ketju" ja palautetaan res
+_any(@nospecialize(_::State), res::Success, @nospecialize(ps...)) = res
+# parseri failasi, kokeillaan seuraavaa
+_any(s::State, _::Failure, p1::Function, ps::Function...) = () -> _any(s, p1(s), ps...)
 
-# loppu thunkit kesken -> fail
-_any() = Failure()
+# loppui parserit kesken --> fail
+_any(@nospecialize(_::State), _::Failure) = Failure()
+
 
 function (o::Or)(s::State)
-  _any(@>(o.pa(s)), @>(o.pb(s)))
+  _any(s, o.pa, o.pb)
 end
 
 
@@ -364,17 +368,15 @@ end
 @inline first_output_type(::Type{<:And{A}}) where {A} = A
 
 # käy parsereita läpi niin kauan ku ne palauttaa Success. Syöttää aina edellisen palauttaman Staten
-# seuraavalle.
-# vrt _first_of, jossa ei tarvii kuljettaa tota resulttia mukana, koska kaikki sille annettavat parserit saa
-# saman inputin
-_all(curr_res::Success, p::Parser, ps::Parser...) = _all(p(curr_res.state), ps...)
+# seuraavalle
+_all(curr_res::Success, p::Parser, ps::Parser...) = () -> _all(p(curr_res.state), ps...)
 
 #jos eka arg on thunk, palauta thunk jossa kutsutaan _all resolvatulla arvolla
 _all(s_thunk::Function, ps...) = () -> _all(s_thunk(), ps...)
 # ketjun viimeinen Success -> koko paska menee läpi
-_all(s::Success) = () -> s
+_all(s::Success) = s
 # Failure missä tahansa kohtaa ketjua -> fail
-_all(::Failure, @nospecialize(ps...)) = () -> Failure()
+_all(::Failure, @nospecialize(ps...)) = Failure()
 
 
 function (a::And)(s::State)
@@ -399,33 +401,46 @@ function (::UInts{NCodons})(s::S) where {NCodons,O,I,S<:State{O,I}}
 end
 
 """
-Parsii varinttejä. Ei failaa koskaan: jos inputti on tyhjä (tai ekassakin kodonissa on eka bitti )
+    Varints{MaxCodons}
+    Varints{3}
 
-HOX: käytännössä vaatii inputin muotoa `Vector{Vector{Int}}`
+Parsii varinttejä, ottaa enintään `MaxCodons` kodonia inputista. `Varints{1}` on vähän pöljä koska se ei enää
+ole varsinaisesti varint kun se lukee aina vaan tasan yhden kodonin, mutta 🤷.
+
+Failaa jos inputti on tyhjä.
+
+HOX: vaatii inputin muotoa `Vector{Vector{Int}}`
 """
 struct Varints{MaxCodons} <: Parser{UInt} end
 ## TODO FIXME: input type Parserille??? Miten esim Varints muuten saa merkattua että se vaatii "chunkkeja"
 
+
 function (::Varints{MaxCodons})(s::S) where {MaxCodons,O,I,S<:State{O,I}}
-  inp = s.remaining_input
-
-  # first::AbstractArray{Int} = inp |> Take(1) |> collect
-  # if isempty(first)
-  #   return UInt(0)
-  # end
-
-  keep = inp |> TakeWhile(_first_is_1) |> Take(MaxCodons) |> collect
-  rest = inp |> Drop(length(keep))
-  num::UInt = if isempty(keep)
-    UInt(0)
+  isempty(s.remaining_input) && return Failure()
+  first, rest = Iterators.peel(s.remaining_input)
+  ntaken = 0
+  num::UInt = if !_first_bit_is_1(first)
+    @view(first[2:end]) |> Musica.undigits
   else
-    keep |> MapCat(x -> @view x[2:end]) |> collect |> Musica.undigits
-  end
+    taken = rest |>
+            @>(Iterators.takewhile(_first_bit_is_1)) |>
+            @<(Iterators.take(MaxCodons-1)) |> # -1 koska first otettiin jo
+            collect
 
-  Success(append_output(s, num, rest))
+    ntaken = length(taken)
+    @info "Varints parsing took more bits" ntaken length(taken)
+    bits = taken |>
+    @>(Iterators.flatmap(x -> @view x[2:end])) |>
+    collect |>
+    @<(prepend!(@view first[2:end])) |>
+    undigits
+  end
+  @info "Varints parsed" ntaken num
+  input_rest = rest |> @<(Iterators.drop(ntaken))
+  Success(append_output(s, num, input_rest))
 end
 
-@inline _first_is_1(x) = x[begin] == one(eltype(x))
+@inline _first_bit_is_1(x) = x[begin] == one(eltype(x))
 
 @testitem "Parsing.UInts" begin
   using Transducers
@@ -462,7 +477,7 @@ end
   let inp = Vector{Bool}[[0, 1, 1, 1], [1, 0, 1, 0]], want = UInt(0b111)
     # HOX: 0:lla alkava kodoni tarkottaa vaan että sen jälkeen ei oo tulossa lisää, ei että ees sitä kodonia
     #      ei pitäis tulkata 
-    @test_broken Parsing.execute(Parsing.Varints{2}(), inp) === Parsing.Success(Parsing.State(want, [[1,0,1,0]]))
+    @test Parsing.execute(Parsing.Varints{2}(), inp) == Parsing.Success(Parsing.State(want, [Bool[1,0,1,0]]))
   end
 
   # let inp_flat = inp |> Cat() |> collect
@@ -475,9 +490,8 @@ end
 
 _execute(res::Result) = res
 
-# FIXME: runtime calls koska thunk reassignataan ja res voi olla mitä sattuu
-function _execute(thunk::F)::Result where {F<:Function}
-  res::Union{<:Function, Result} = thunk()
+function _execute(thunk::Function)::Result
+  res = thunk()
   while res isa Function
     res = res()
   end
@@ -519,7 +533,7 @@ end
     @test Parsing.execute(Parsing.Or(p2, p1), s) == Parsing.Success(Parsing.State([1, 1], [1, 0]))
     let out = Parsing.execute(Parsing.Or(p2, p1), s)
       @test out isa Parsing.Success
-      @test typeof(Musica.maybe_collect(out.state.output)) <: SSome{Vector{Bool}}
+      @test typeof(out.state.output) <: SSome{Vector{Bool}}
     end
   end
 
@@ -543,7 +557,7 @@ end
 
     let out = execute(Parsing.And(p1, p2), s)
       @test out isa Success
-      @test typeof(Musica.maybe_collect(out.state.output)) == SSome{Tuple{Vector{Bool},Vector{Bool}}}
+      @test typeof(out.state.output) == SSome{Tuple{Vector{Bool},Vector{Bool}}}
     end
   end
 
