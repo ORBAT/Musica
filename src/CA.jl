@@ -244,7 +244,7 @@ julia> undigits([])
 0x0000000000000000
 ```
 """
-Base.@assume_effects :consistent :effect_free :terminates_locally function undigits(d::Union{AbstractArray,Tuple}, base=2)
+Base.@assume_effects :consistent :effect_free :terminates_locally function undigits(d, base=2)
   let d_len = length(d)
     if d_len == 0
       return UInt(0)
