@@ -2,13 +2,20 @@ using StatsBase, Random, StructArrays
 using ..Musica: SizedType
 
 """
-palauttaa 
-    [(parent_a1, parent_b1), (parent_a2, parent_b2), [...], (parent_an, parent_bn)]
+palauttaa
+
+```
+[(parent_a1, parent_b1), (parent_a2, parent_b2), [...], (parent_an, parent_bn)]
+```
 """
-@propagate_inbounds function select_parents(population::AbstractArray{Indiv}, n; tournament_size=2, rng=Random.default_rng())::AbstractArray{NTuple{2,Indiv}} where {Indiv}
+@propagate_inbounds function select_parents(population::AbstractArray{Indiv},
+  n;
+  tournament_size=2,
+  rng=Random.default_rng(),
+)::AbstractArray{NTuple{2,Indiv}} where {Indiv}
   # HOX: population pitää olla fitnessin mukaan järjestyksessä, paras eka
   # TODO FIXME: poista tää assert jahka homma pelittää
-  @assert issorted(population; by=fitness)
+  @boundscheck @assert issorted(population; by=fitness)
   # (Indiv, Indiv)[]
   parents = Array{NTuple{2,Indiv}}(undef, n)
   for i in 1:n
@@ -17,14 +24,11 @@ palauttaa
   parents
 end
 
-function _tournament_select_with_one_tournament(individuals::AbstractArray{T}, ::Type{Val{n}}; tournament_size, rng)::NTuple{n,T} where {T,n}
-  # arvotaan `tournament_size` kpl indeksejä `individuals`ista. Ei toistoja, ja järjestyksessä pienin ensin
-  idxs = StatsBase.sample(rng, 1:length(individuals), tournament_size; replace=false, ordered=true)
-  # otetaan näistä indekseistä ekat n (eli parhaat `n` kpl), ja käytetään sitä maskina `individuals`ille --> turnauksen parhaat `n` kpl yksilöä
-  @inbounds Tuple(individuals[idxs[1:n]])
-end
-
-@propagate_inbounds function tournament_select_two(individuals::AbstractArray{T}; tournament_size, rng)::NTuple{2,T} where {T}
+@propagate_inbounds function tournament_select_two(
+  individuals::AbstractArray{T};
+  tournament_size,
+  rng,
+)::NTuple{2,T} where {T}
   n_indivs = length(individuals)
   parent_a_idx = _tournament_select_idx(n_indivs, tournament_size, rng)
   parent_b_idx = _tournament_select_idx(n_indivs, tournament_size, rng)
@@ -35,18 +39,10 @@ end
   individuals[min(parent_a_idx, parent_b_idx)], individuals[max(parent_a_idx, parent_b_idx)]
 end
 
-# function tournament_select(individuals::AbstractArray{T}, ::Type{Val{1}}; tournament_size, rng)::T where {T}
-#   # arvotaan `tournament_size` kpl indeksejä `individuals`ista. Ei toistoja, ja järjestyksessä pienin ensin
-#   idxs = StatsBase.sample(rng, 1:length(individuals), tournament_size; replace=false, ordered=true)
-#   # otetaan näistä indekseistä eka eli paras, käytetään maskina `individuals`ille --> turnauksen paras yksilö
-#   @inbounds individuals[idxs[1]]
-# end
-
 function _tournament_select_idx(max_idx, tournament_size, rng)
   idxs = StatsBase.sample(rng, 1:max_idx, tournament_size; replace=false, ordered=true)
   @inbounds idxs[1]
 end
-
 
 ### HOX HOX HOX HOX:
 # eiks tää vittu riko nyt ton mun hienon genomi-idean? Tää saattaa katkasta kodonin näppärästi 
@@ -56,11 +52,9 @@ end
 ## -------> HUOM: ei haittaa! Tää on täysin agnostic a:n ja b:n rakenteelle. et jos niistä tekee esim Vector{Vector{Bool}} tmv ni homma
 # pelannee mainiosti. TODO: VITTU TESTAA ETTÄ SE PELAA
 
-
-
 # TODO: "virallisesti" crossoverin pitäis palauttaa tietty kaks childiä
 function uniform_crossover(a::AbstractArray, b::AbstractArray; rng=Random.default_rng())
-  # HOX! vanhemmalta saatujen bittien etäisyydet ei sais muuttua, koska epistaasi (ks essentials of metaheuristics p38). 
+  # HOX! vanhemmalta saatujen bittien etäisyydet ei sais muuttua, koska epistaasi / linkage (ks essentials of metaheuristics p38). 
   # Se ratkaiseva "geenipatterni" voi olla 
   #     _ _ 1 _ 0 0 1 _ 0
   # tmv, eli bittien keskinäinen välimatka merkitsee.
@@ -93,7 +87,8 @@ function uniform_crossover(a::AbstractArray, b::AbstractArray; rng=Random.defaul
   # offspring_len = 7
 
   # indeksit, jotka lyhyemmästä tulee mukaan jälkeläiseen
-  shorter_mask = StatsBase.sample(rng, 1:shorter_len, n_bits_from_shorter; replace=false, ordered=true)
+  shorter_mask =
+    StatsBase.sample(rng, 1:shorter_len, n_bits_from_shorter; replace=false, ordered=true)
   # shorter_mask = [1, 3, 5]
   # tää on ikään kuin sapluuna [1, _, 3, _, 5]
   #
@@ -169,7 +164,6 @@ end
 function mutate_insert(genome::AbstractArray;mut_segment_max_len,genome_max_len)
 
 end =#
-
 
 # HOX TODO: mutaatiotyypit
 #=

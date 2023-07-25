@@ -3,7 +3,7 @@ using StaticArrays, StructArrays, TestItems, Folds, Random
 using ..Musica: SizedType
 using ..Musica
 using Printf
-using AutoHashEqualsCached
+using AutoHashEquals
 
 #= ################### NOTE muistiinpanoja
 
@@ -53,7 +53,6 @@ end =#
   genome_opts::GO = GenomeOptions()
   mutation_opts::MutationOptions = MutationOptions()
 
-
   objective_fn::ObjFn
   # HOX: Union on ilm usein parempi vaihtoehto ku abstraktin tyypin käyttäminen, koska union splitting 
   #  https://julialang.org/blog/2018/08/union-splitting/
@@ -62,7 +61,12 @@ end
 
 Options(go, mo, obj_fn, rng) = Options{typeof(go),Core.Typeof(obj_fn)}(go, mo, obj_fn, rng)
 
-@forward Options.genome_opts (genome_min_length, genome_max_length, clamp_genome_length!)
+@forward Options.genome_opts (
+  genome_min_length,
+  genome_max_length,
+  clamp_genome_length!,
+  genome_length_extrema,
+)
 
 # TODO: forward Options.genome_opts:ille kaikki hyödylliset GenomeOptions:ia ottavia funkkareita tyyliin genome_max_len, active_codon_length jne jne
 
@@ -93,16 +97,15 @@ Options(go, mo, obj_fn, rng) = Options{typeof(go),Core.Typeof(obj_fn)}(go, mo, o
     isequal(a.rng, b.rng)
 end
 
+@inline _get_rng(o::Options) = some(o.rng, Random.default_rng())
 
-@inline _get_rng(o::Options) = get_value(o.rng, Random.default_rng())
-
+# TODO: joku muu nimi tälle? Onks nihkeetä ku nyt on Musica.State (state monad) ja sit GA.State? Toisaalta en tiiä haittaaks? Nää on eri moduuleissa eikä eksportattuja
 @auto_hash_equals mutable struct State{N,GenomeType<:AbstractArray,O<:Options}
   const options::O
 
   genomes::SizedVector{N,GenomeType}
   # _decoded_genomes::SizedVector{N, Decoded}
   fitnesses::SizedVector{N,Float64}
-
 
   generation::Int
 
@@ -123,18 +126,23 @@ end
   end
 end
 
-
-
-function State{N}(genomes::SizedVector{N,GenomeType}, fitnesses::SizedVector{N,Float64}, opts::O, inited::Bool) where {N,GenomeType,O<:Options{GenomeType}}
+function State{N}(
+  genomes::SizedVector{N,GenomeType},
+  fitnesses::SizedVector{N,Float64},
+  opts::O,
+  inited::Bool,
+) where {N,GenomeType,O<:Options{GenomeType}}
   State{N,GenomeType,O}(genomes, fitnesses, opts, 0, -1, 0, inited)
 end
-
 
 # @inline function State{N}(genomes::GS, fitnesses, opts::Options, inited=true) where {N,GT<:AbstractArray,GS<:SizedVector{N,GT}}
 #   State{N,GT}(genomes, fitnesses, opts, -1, 0, 0, inited)
 # end
 
-@inline function State{N}(genomes::GS, opts::Options) where {N,GT<:AbstractArray,GS<:SizedVector{N,GT}}
+@inline function State{N}(
+  genomes::GS,
+  opts::Options,
+) where {N,GT<:AbstractArray,GS<:SizedVector{N,GT}}
   State{N}(genomes, opts, false)
 end
 #= 
@@ -173,37 +181,52 @@ const _StructVecIndiv = StructVector{Individual}
   genomes::SizedVector{N,GenomeType} # genomit
   fitnesses::SizedVector{N,Float64}
 =#
-(individuals(genomes::AbstractArray{GenomeType}, fitnesses::AbstractArray{Float64})::AbstractArray{Individual}) where {GenomeType} =
+(
+  individuals(
+    genomes::AbstractArray{GenomeType},
+    fitnesses::AbstractArray{Float64},
+  )::AbstractArray{Individual}
+) where {GenomeType} =
   _StructVecIndiv((genomes, fitnesses))
 individuals(s::State{N}) where {N} = individuals(s.genomes, s.fitnesses)
 individuals_lazy(s::State{N}) where {N} = individuals(s) |> LazyRows
-individuals_lazy(genomes::AbstractArray{GenomeType}, fitnesses::AbstractArray{Float64}) where {GenomeType} =
+individuals_lazy(
+  genomes::AbstractArray{GenomeType},
+  fitnesses::AbstractArray{Float64},
+) where {GenomeType} =
   individuals(genomes, fitnesses) |> LazyRows
 
-function _generate_random_population!(opts::Options, pop::SizedType{N,GT}, including::AbstractArray{GT}=GT[]) where {N,GT<:AbstractArray}
+function _generate_random_population!(
+  opts::Options,
+  pop::SizedType{N,GT},
+  including::AbstractArray{GT}=GT[],
+) where {N,GT<:AbstractArray}
   including_len = length(including)
   @assert including_len ≤ N
   copyto!(pop, including)
   let left_to_generate = N - including_len
     if left_to_generate > 0
       for i in including_len+1:N
-        @inbounds pop[i] = generate_random_individual(opts, GT)
+        @inbounds pop[i] = generate_random_individual(opts)
       end
     end
   end
   pop
 end
 
-function _generate_random_population!(s::State{N,GT}, including::AbstractArray{GT}=GT[]) where {N,GT<:AbstractArray}
+function _generate_random_population!(
+  s::State{N,GT},
+  including::AbstractArray{GT}=GT[],
+) where {N,GT<:AbstractArray}
   pop = SizedVector{N,GT}(Vector{GT}(undef, N))
   s.genomes = _generate_random_population!(s.options, pop, including)
   s
 end
 
-@inline function generate_random_individual(o::Options, ::Type{Vector{Bool}})
+@inline function generate_random_individual(o::Options{<:GenomeOptions{Elem}}) where {Elem}
   rng = _get_rng(o)
-  let (min_len, max_len) = genome_length_extrema(o.genome_opts)
-    rand(rng, Bool, rand(rng, min_len:max_len))
+  let (min_len, max_len) = genome_length_extrema(o)
+    rand(rng, Elem, rand(rng, min_len:max_len))
   end
 end
 
@@ -226,12 +249,16 @@ HUOM: mutatoi `fitnesses`iä
   s
 end
 
-function _evaluate_fitnesses!(opts::Options, genomes::SizedType{N,GenomeType}, fitnesses::SizedType{N,Float64}) where {N,GenomeType}
+function _evaluate_fitnesses!(
+  opts::Options,
+  genomes::SizedType{N,GenomeType},
+  fitnesses::SizedType{N,Float64},
+) where {N,GenomeType}
   # TODO: mieti tää evaluointikuvio
   obj_fn = opts.objective_fn
 
   # TODO FIXME: optionsit ja dekoodaus menny uusiks --> kato toimiiks tää
-  genome_decoder = @>(decode_genome(opts.genome_opts))
+  genome_decoder = @>(split_into_codons(opts.genome_opts))
 
   Folds.foreach(individuals_lazy(genomes, fitnesses)) do indiv
     decoded = indiv.genome |> genome_decoder
@@ -241,7 +268,6 @@ function _evaluate_fitnesses!(opts::Options, genomes::SizedType{N,GenomeType}, f
   end
   fitnesses
 end
-
 
 @inline function _evaluate_fitnesses!(s::State{N}) where {N}
   _evaluate_fitnesses!(s.options, s.genomes, s.fitnesses)
@@ -275,15 +301,16 @@ function optimize() end
   const N = 8
   rng() = Xoshiro(666)
   function obj_fn(genome)
-    # HOX: varmistaa että genomi oikeesti on muotoa [(1,0,1,0), (1,1,1,1), ...]
-    _g::Vector{Vector{Int}} = genome |> collect
-
-    _sum = (_g |> Iterators.flatten |> sum)
+    _sum = (genome |> Iterators.flatten |> sum)
     (42 - _sum)^2
   end
-  getopts() = GA.Options(objective_fn=obj_fn, genome_opts=GA.GenomeOptions(max_codons=5, min_codons=2), rng=rng())
+  getopts() = GA.Options(;
+    objective_fn=obj_fn,
+    genome_opts=GA.GenomeOptions(; max_codons=5, min_codons=2),
+    rng=rng(),
+  )
 
-  s = GA.State{N,Vector{Bool}}(getopts()) |> GA._init!
+  s = GA.State{N,BitVector}(getopts()) |> GA._init!
   @test issorted(GA.fitnesses(s))
 
   # HUOM: riippuu rng:stä
@@ -292,10 +319,12 @@ function optimize() end
   end
 
   # samalla rng:llä initialisoidut 2 eri statea pitäis olla samat
-  @test GA.State{N,Vector{Bool}}(getopts()) |> GA._init! == GA.State{N,Vector{Bool}}(getopts()) |> GA._init!
+  @test GA.State{N,Vector{Bool}}(getopts()) |> GA._init! ==
+        GA.State{N,Vector{Bool}}(getopts()) |> GA._init!
 
   # maybe a bit of a stupid test. Tests that a state with pop N is != to a state with pop 5
-  @test GA.State{N,Vector{Bool}}(getopts()) |> GA._init! != GA.State{5,Vector{Bool}}(getopts()) |> GA._init!
+  @test GA.State{N,Vector{Bool}}(getopts()) |> GA._init! !=
+        GA.State{5,Vector{Bool}}(getopts()) |> GA._init!
   # using StaticArrays
 
   # genome1 = Bool[1, 1, 1, 1]
@@ -310,7 +339,6 @@ function optimize() end
   #=
    Musica.GA._Individual2[Musica.GA._Individual2(Bool[1, 1, 1, 1], 1.0), Musica.GA._Individual2(Bool[0, 1], 2.0)] == 
    Musica.GA._Individual2[Musica.GA._Individual2(Bool[1, 1, 1, 1], 1.0), Musica.GA._Individual2(Bool[0, 1], 2.0)]
-
 
   =#
 

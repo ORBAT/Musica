@@ -1,4 +1,4 @@
-using Transducers, TestItems, MacroTools
+using Transducers, TestItems, MacroTools, Static, Try, TryExperimental, Tricks
 using FunctionWrappers: FunctionWrapper as Fn
 
 """
@@ -12,7 +12,8 @@ end
 
 @testitem "repeated" begin
   _fn(x) = 2x
-  @test Musica.repeated_compose(_fn, 5)(5) == Musica.repeated_iter(_fn, 5)(5) == Musica.repeated_for(_fn, 5)(5)
+  @test Musica.repeated_compose(_fn, 5)(5) == Musica.repeated_iter(_fn, 5)(5) ==
+        Musica.repeated_for(_fn, 5)(5)
 end
 
 # HUOM: repeated_compose:n palauttama funkkari on reilusti nopeampi ku repeated_fold:in, mutta
@@ -22,12 +23,13 @@ end
 # # foldl takes a fn (acc, x). (fn ∘ left) is (acc,_) -> fn(acc)
 # # this is basically just fn composed with itself `times` times (fn ∘ fn ∘ ... )
 @inline repeated_fold(fn, times) = (input) -> (@inline; foldl((fn ∘ left), 1:times; init=input))
-@inline repeated_iter(fn, times) = inp -> (@inline; 1:times+1 |> Iterated(fn, inp) |> TakeLast(1) |> collect |> only)
+@inline repeated_iter(fn, times) =
+  inp -> (@inline; 1:times+1 |> Iterated(fn, inp) |> TakeLast(1) |> collect |> only)
 
 @inline function repeated_for(fn, times)
   input -> begin
     @inline
-    let fn = fn, times = times, out = input
+    let out = input
       for _ in 1:times
         out = fn(out)
       end
@@ -36,123 +38,154 @@ end
   end
 end
 
+const ArgHead = :BindHead
+const ArgTail = :BindTail
 
-@inline left((a,)::NTuple{1}) = a
-@inline left(a, _) = a
-@inline left((a, _)) = a
-@inline right(_, b) = b
-@inline right((_, b)) = b
-
-const ArgHead = Val{:BindHead}
-const ArgTail = Val{:BindTail}
-const ArgPos = Union{ArgHead,ArgTail}
-
-# ks @< ja @>
-struct BoundCall{InitArgPos<:ArgPos,InitArg,F<:Base.Callable,KW} <: Function
+"""
+Like `Base.Fix1` and `Base.Fix2` but supports binding / fixing an arbitrary number of arguments starting from the first or the last, . See the `@<` and `@>` macros
+"""
+struct BoundCall{InitArgPos,InitArg,F,KW} <: Function
   f::F
   arg::InitArg
   kw::KW
 
-  _str::String
-
-  function BoundCall{InitArgPos}(f::F, str_representation::String, x; kwargs...) where {InitArgPos,F}
-    new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs, str_representation)
-  end
-
-  function BoundCall{InitArgPos}(f::F, str_representation::String, x...; kwargs...) where {InitArgPos,F}
-    new{InitArgPos,_stable_typeof(x),F,_stable_typeof(kwargs)}(f, x, kwargs, str_representation)
+  function BoundCall{InitArgPos,F}(
+    f::F,
+    x,
+    kwargs,
+  ) where {InitArgPos,F}
+    new{InitArgPos,Core.Typeof(x),F,typeof(kwargs)}(f, x, kwargs)
   end
 end
 
-@inline _stringify_argpos(::Type{ArgHead}) = ":ArgHead"
-@inline _stringify_argpos(::Type{ArgTail}) = ":ArgTail"
+BoundCall{ArgPos}(f, x; kw...) where {ArgPos} =
+  BoundCall{ArgPos,Core.Typeof(f)}(f, x, kw)
 
+BoundCall{ArgPos}(f, x::Vararg{Any,N}; kw...) where {ArgPos,N} =
+  BoundCall{ArgPos,Core.Typeof(f)}(f, x, kw)
 
-Base.show(io::IO, b::BoundCall) = print(io, b._str)
-Base.show(io::IO, ::MIME"text/plain", b::BoundCall{AP}) where {AP} = print(io,
-  "BoundCall{",
-  _stringify_argpos(AP), "}(",
-  b._str, ")")
+Base.show(io::IO, b::BoundCall) =
+  print(io, _stringify_bound_call(b)...)
 
-const BoundCallWTuple{InitArgPos} = BoundCall{InitArgPos,InitArg} where {InitArg<:Tuple}
+function Base.show(io::IO, ::MIME"text/plain", b::BoundCall)
+  print(io, "BoundCall(")
+  print(io, b, ')')
+end
 
-const _EmptyKW = Base.Pairs{Symbol,Union{},Tuple{},NamedTuple{(),Tuple{}}}
-const _emptyKW = pairs((;))
+const _emptyKW::typeof(pairs((;))) = pairs((;))
+const _EmptyKW = _emptyKW |> typeof
 
-"Only call `merge` if both parameters are non-empty, otherwise just return the non-empty param"
+"""
+a shortcut for a `BoundCall` with >1 arguments, ie. ones where `InitArg` is a tuple
+"""
+const BoundCWTuple{InitArgPos} = BoundCall{InitArgPos,InitArg} where {InitArg<:Tuple}
+
+"""
+Only call `merge` if both parameters are non-empty, otherwise just return the non-empty param
+"""
 @inline _merge_nonempty(d, other) = merge(d, other)
 @inline _merge_nonempty(d, ::_EmptyKW) = d
 @inline _merge_nonempty(::_EmptyKW, d) = d
 @inline _merge_nonempty(::_EmptyKW, ::_EmptyKW) = _emptyKW
 
-@inline (f::BoundCall{ArgHead})(y; kw...) = f.f(f.arg, y; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCall{ArgHead})(ys...; kw...) = f.f(f.arg, ys...; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCallWTuple{ArgHead})(y; kw...) = f.f(f.arg..., y; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCallWTuple{ArgHead})(ys...; kw...) = f.f(f.arg..., ys...; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCall{ArgHead})(ys...) =
+  f.f(f.arg, ys...; f.kw...)
+@inline (f::BoundCWTuple{ArgHead})(ys...) =
+  f.f(f.arg..., ys...; f.kw...)
 
-@inline (f::BoundCall{ArgTail})(x; kw...) = f.f(x, f.arg; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCall{ArgTail})(xs...; kw...) = f.f(xs..., f.arg; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCallWTuple{ArgTail})(x; kw...) = f.f(x, f.arg...; _merge_nonempty(f.kw, kw)...)
-@inline (f::BoundCallWTuple{ArgTail})(xs...; kw...) = f.f(xs..., f.arg...; _merge_nonempty(f.kw, kw)...)
+@inline (f::BoundCall{ArgTail})(xs...) = f.f(xs..., f.arg; f.kw...)
+@inline (f::BoundCWTuple{ArgTail})(xs...) =
+  f.f(xs..., f.arg...; f.kw...)
 
+_stringify_args(::Tuple{}) = ""
+_stringify_args(args...) = join(map(repr, args), ",")
+_stringify_args(args) = repr(args)
+_stringify_kws(kws) = ";" * join(["$(x.first)=$(x.second)" for x in kws], ",")
+_stringify_kws(::_EmptyKW) = ""
+
+_stringify_unbound_param(::Val{ArgHead}, name, ::Tuple{}) = name
+_stringify_unbound_param(::Val{ArgTail}, name, ::Tuple{}) = name
+_stringify_unbound_param(::Val{ArgHead}, name, @nospecialize(args)) = string(", ", name)
+_stringify_unbound_param(::Val{ArgTail}, name, @nospecialize(args)) = string(name, ", ")
+
+function _stringify_bound_call(bc::BoundCall{ArgHead})
+  pname = _param_name_for(bc)
+
+  ('(', pname, ") -> ", string(bc.f), "(",
+    _stringify_args(bc.arg),
+    _stringify_unbound_param(Val{ArgHead}(), pname, bc.arg),
+    _stringify_kws(bc.kw), ")")
+end
+
+function _stringify_bound_call(bc::BoundCall{ArgTail})
+  pname = _param_name_for(bc)
+
+  ('(', pname, ") -> ", string(bc.f), "(",
+    _stringify_unbound_param(Val{ArgTail}(), pname, bc.arg),
+    _stringify_args(bc.arg),
+    _stringify_kws(bc.kw), ")")
+end
+
+const _metasynt_names::NTuple{16,String} =
+  (
+    "foo",
+    "bar",
+    "baz",
+    "qux",
+    "corge",
+    "grault",
+    "garply",
+    "waldo",
+    "alice",
+    "eve",
+    "bob",
+    "xyzzy",
+    "spam",
+    "eggs",
+    "ham",
+    "plugh",
+  )
+
+const _metasynt_args::typeof(_metasynt_names) = map(x -> x * "...", _metasynt_names)
+
+_param_name_for(x) =
+  let v = x |> objectid, _metasyn_len = length(_metasynt_args)
+    _metasynt_args[1+(v%_metasyn_len)]
+  end
 
 @testitem "BoundCall" begin
   using Musica: BoundCall, ArgHead, ArgTail
-  fn(a, b; c=3, d) = a / (b - c)d
-
-  let bfn = BoundCall{ArgHead}(fn, "fn", 1)
-    @test bfn(2; d=4) == fn(1, 2; d=4)
-    @test bfn(2; c=30, d=40) == fn(1, 2; c=30, d=40)
+  fn(a, b; c=3, d=4) = a / (b - c)d
+  let bfn = BoundCall{ArgHead}(fn, 1)
+    @test @inferred(bfn(2)) ==
+          fn(1, 2)
   end
 
-  let bfn = BoundCall{ArgHead}(fn, "fn", 1, 2)
-    @test bfn(; d=4) == fn(1, 2; d=4)
-    @test bfn(c=30, d=40) == fn(1, 2; c=30, d=40)
+  let bfn = BoundCall{ArgHead}(fn, 1, 2)
+    @test @inferred(bfn()) ==
+          fn(1, 2)
   end
 
-  let bfn = BoundCall{ArgHead}(fn, "fn")
-    @test bfn(1, 2; d=4) == fn(1, 2; d=4)
-    @test bfn(1, 2; c=30, d=40) == fn(1, 2; c=30, d=40)
+  let bfn = BoundCall{ArgHead}(fn)
+    @test @inferred(bfn(1, 2)) ==
+          fn(1, 2)
   end
 
-  let bfn = BoundCall{ArgTail}(fn, "fn", 2)
-    @test bfn(1; d=4) == fn(1, 2; d=4)
-    @test bfn(1; c=30, d=40) == fn(1, 2; c=30, d=40)
+  let bfn = BoundCall{ArgTail}(fn, 2)
+    @test @inferred(bfn(1)) ==
+          fn(1, 2)
   end
 
-  let bfn = BoundCall{ArgTail}(fn, "fn", 1, 2)
-    @test bfn(d=4) == fn(1, 2; d=4)
-    @test bfn(c=30, d=40) == fn(1, 2; c=30, d=40)
+  let bfn = BoundCall{ArgTail}(fn, 1, 2)
+    @test @inferred(bfn()) ==
+          fn(1, 2)
   end
 
-  let bfn = BoundCall{ArgTail}(fn, "fn")
-    @test bfn(1, 2; d=4) == fn(1, 2; d=4)
-    @test bfn(1, 2; c=30, d=40) == fn(1, 2; c=30, d=40)
+  let bfn = BoundCall{ArgTail}(fn)
+    @test @inferred(bfn(1, 2)) ==
+          fn(1, 2)
   end
 end
-
-"""
-HOX: tulee outo herja REPL:iin jos tekee näin: 
-
-    @inline (f::_BoundCallHead{<:Tuple})(y; kw...) = f.f(f.x..., y; _merge_nonempty(f.kw, kw)...)
-
-    @inline (f::_BoundCallHead{<:Tuple})(ys...; kw...) = f.f(f.x..., ys...; _merge_nonempty(f.kw, kw)...)
-      #=
-      ┌ Warning: skipping callee #_#157 (called by nothing) due to UndefRefError()
-      └ @ LoweredCodeUtils ~/.julia/packages/LoweredCodeUtils/30gbF/src/signatures.jl:292
-      =#
-
-
-KYS: miks toi herjaa kun taas `const _BoundCallHeadTup = _BoundCallHead{InitArgs} where {InitArgs<:Tuple}`-aliaksella kaikki menee jees, vaikka ton aliaksen pitäis olla käytännössä sama:
-
-    julia> Musica._BoundCallHead{<:Tuple}
-    Main.Musica.BoundCall{Val{:CurryHead}, var"#s257", F} where {var"#s257"<:Tuple, F}
-
-    julia> Musica._BoundCallHeadTup
-    Main.Musica.BoundCall{Val{:CurryHead}, InitArgs, F} where {InitArgs<:Tuple, F}
-
-"""
-
 
 """
     bound = @> fn(a,b)
@@ -160,9 +193,10 @@ KYS: miks toi herjaa kun taas `const _BoundCallHeadTup = _BoundCallHead{InitArgs
 
 Bind a function call (or other callable, such as a type) so that arguments are bound starting from the first (left). The argument must be a function call with at least one argument, and zero or more keyword arguments.
 
-
 ```jldoctest
-julia> a = 1; plus1 = @> +(a);
+julia> a = 1;
+
+julia> plus1 = @> +(a);
 
 julia> plus1(2)
 3
@@ -170,123 +204,72 @@ julia> plus1(2)
 julia> plus1(2, 3)
 6
 
-julia> to_binary_digits = @> digits(Int; base=2);
-
-julia> show(to_binary_digits(20; pad=8))
-[0, 0, 1, 0, 1, 0, 0, 0]
+julia> to_binary_digits = @> digits(Int; base=2, pad=8);
 
 julia> show(to_binary_digits(20))
-[0, 0, 1, 0, 1]
+[0, 0, 1, 0, 1, 0, 0, 0]
 
-julia> fn = (a, b, c, d; kw1, kw2) -> (a+b+c+d)kw1 // kw2;
+julia> fn = (a, b, c, d; kw1, kw2) -> (a + b + c + d)kw1 // kw2;
 
-julia> bound = @> fn(1, 2; kw1 = 13);
+julia> bound = @> fn(1, 2; kw1=13, kw2=1000);
 
-julia> bound(3, 4; kw2 = 1000) # same as fn(1, 2, 3, 4; kw1 = 13, kw2 = 1000)
-13//100
-
-```
-julia> fn(1, 2, 3, 4; kw1 = 13, kw2 = 1000) == bound(3, 4; kw2 = 1000)
+julia> fn(1, 2, 3, 4; kw1=13, kw2=1000) == bound(3, 4)
 true
+```
 """
 macro >(ex)
-  _bound(ex, :BindHead)
+  _bound(ex, ArgHead)
 end
 
 export @>
-
 
 """
     @< fn(a)
     @< fn(a, b)
     @< fn(a; kw=1)
 
-Bind a function call (or other callable, such as a type) so that arguments are bound starting from the tail (right). The argument must be a function call with at least one argument, 
+Bind a function call (or other callable, such as a type) so that arguments are bound starting from the tail (right). The argument must be a function call with at least one argument,
 and zero or more keyword arguments.
 
 ```jldoctest
-julia> fn = (a, b, c, d; kw1, kw2) -> (a+b+c+d)kw1 // kw2;
+julia> fn = (a, b, c, d; kw1, kw2) -> (a + b + c + d)kw1 // kw2;
 
-julia> curried = @< fn(3, 40; kw2 = 1000);
+julia> curried = @< fn(3, 40; kw2=1000, kw1=13);
 
-julia> curried(1, 2; kw1 = 13) # same as fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000)
-299//500
-
-julia> fn(1, 2, 3, 40; kw1 = 13, kw2 = 1000) == curried(1, 2; kw1 = 13)
+julia> curried(1, 2) == fn(1, 2, 3, 40; kw1=13, kw2=1000)
 true
 ```
-
 """
 macro <(ex)
-  _bound(ex, :BindTail)
+  _bound(ex, ArgTail)
 end
 
 export @<
 
-function _stringify_arg(ex::Expr)
-  # jos kw niin erillinen kw-stringify, muuten vaan string(ex)
-  if ex.head === :kw
-    string(ex.args[1]) * "=" * string(ex.args[2])
-  else
-    string(ex)
-  end
-end
-
-_stringify_arg(x) = string(x)
-
-_stringify_args(::Nothing) = ""
-_stringify_args(args) = join(map(_stringify_arg, args), ",")
-_stringify_kws(kws) = ";" * _stringify_args(kws)
-_stringify_kws(::Nothing) = ""
-
-_stringify_unbound_param(::Type{ArgHead}, ::Nothing) = "_xs..."
-_stringify_unbound_param(::Type{ArgHead}, @nospecialize(args)) = ",_xs..."
-_stringify_unbound_param(::Type{ArgTail}, ::Nothing) = "_xs..."
-_stringify_unbound_param(::Type{ArgTail}, @nospecialize(args)) = "_xs...,"
-
-_stringify_bound_call(T::Type{ArgHead}, fn, args, kws) = "_xs->" * string(fn) * "(" * _stringify_args(args) * _stringify_unbound_param(T, args) * _stringify_kws(kws) * ")"
-_stringify_bound_call(T::Type{ArgTail}, fn, args, kws) = "_xs->" * string(fn) * "(" * _stringify_unbound_param(T, args) * _stringify_args(args) * _stringify_kws(kws) * ")"
-
-
 function _bound(ex, argpos)
-  function _string_sexpr(ex)
-    io = IOBuffer()
-    Meta.show_sexpr(io, ex)
-    io |> take! |> String
-  end
-  @capture(ex, fn_(args__; kws__) | fn_(args__)) || error("Not used on a function call? Syntax: @> f(a, b; c = 1)")
+  @capture(ex, fn_(args__; kws__) | fn_(args__)) ||
+    error("Not used on a function call? Syntax: @> f(a, b; c = 1)")
 
-  # @debug "bound" ex _string_sexpr(ex) args kws
-
-  # if length(args) == 0 && length(kws) == 0
-  #   error("Function call had no regular or keyword arguments. Syntax: @> f(a, b; c = 1)")
-  # end
-
-  # @debug fn args kws
-  ex_str = _stringify_bound_call(Val{argpos}, fn, args, kws)
   fn = esc(fn)
   _args = !isnothing(args) ? map(esc, args) : []
   _kws = !isnothing(kws) ? map(esc, kws) : []
-  # isnothing(kws) ? kws = Any[] : kws = map(esc, kws)
 
   quote
-    Musica.BoundCall{Val{$(QuoteNode(argpos))}}($fn, $(ex_str), $(_args...), $(_kws...))
+    Musica.BoundCall{$(QuoteNode(argpos))}($fn, $(_args...), $(_kws...))
   end
 end
 
-
 @testitem "macros" begin
+  using StaticArrays, Transducers, Static, MicroCollections
   fn(a, b; c, d=0) = (a - b) * (c + d)
 
   # pelkkä kw arg
-  @test @<(fn(; c=5))(12, 2) == 50
+  @test @inferred(@<(fn(; c=5))(12, 2)) == 50
 
   # pelkkä kw pitäis toimia samalla tavalla sekä @> että @<
-  @test @>(fn(; c=5))(12, 2) == 50
+  @test @inferred(@>(fn(; c=5))(12, 2)) == 50
 
-  @test @>(fn(12))(2; c=5) == 50
-  @test @>(fn(12, c=5))(2) == 50
-  @test @>(fn(12; c=5))(2) == 50
+  @test @inferred(@>(fn(12; c=5))(2)) == 50
 
   # testaa että hommat toimii myös konstruktoreiden kanssa. `Dada(n)`ssä `Dada`n tyyppi on `UnionAll` eikä
   # Function
@@ -295,30 +278,73 @@ end
   end
 
   Dada(v) = Dada{Int,Int,Int}(v)
-  @test (@> Dada(5))() == Dada{Int,Int,Int}(5)
+  @test @inferred((@> Dada(5))()) == Dada{Int,Int,Int}(5)
 
+  Base.@constprop :aggressive @inline function _droplast(
+    arr::SizedVector{L},
+    n,
+  ) where {L}
+    arr_parent = arr |> parent
+    # NOTE: @inbounds is safe here because if n≥L, the slice would just give an empty array/view
+    @inbounds begin
+      SizedVector{L - n}(@view arr_parent[1:end-n])
+    end
+  end
+
+  Base.@constprop :aggressive @inline function _droplast2(
+    arr,
+    n,
+  )
+    # NOTE: @inbounds is safe here because if n≥L, the slice would just give an empty array/view
+    @inbounds begin
+      @view arr[1:end-n]
+    end
+  end
+  #! format: off
+  const AllowedT = Union{Vector{StaticArraysCore.SizedVector{3,Int64,SubArray{Int64,1,Vector{Int64},Tuple{UnitRange{Int64}},true},},},MicroCollections.UndefVector{Union{},typeof(MicroCollections.default_factory)},}
+  #! format: on
+
+  let sv = map(x -> SizedVector{5}(x:x+4 |> collect), 1:5)
+    @test(Musica.@test_inferret(sv |> Map(@<(_droplast(static(2)))) |> collect) |> sum |> sum == 60)
+  end
+
+  let sv = map(x -> SizedVector{5}(x:x+4 |> collect), 1:5)
+    @test(@inferred(Iterators.map(@<(_droplast(static(2))), sv) |> collect) |> sum |> sum == 60)
+  end
+
+  @test @inferred(SizedVector{5}(1:5 |> collect) |> @<(_droplast2(2))) ==
+        SizedVector{3}(1:3 |> collect)
+
+  let sv = map(x -> SizedVector{5}(x:x+4 |> collect), 1:5)
+    @test(@inferred(Iterators.map(x -> _droplast(x, 2), sv) |> collect) |> sum |> sum == 60)
+  end
 end
 
-@inline _stable_typeof(x) = typeof(x)
-@inline _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
+"""
+    mapper(fn)
 
-@inline maps(fn::F) where {F<:Base.Callable} = @> map(fn)
+Partially applied `map(fn, _)`, returns `x -> map(fn, x)`
+"""
+@inline mapper(fn) = Base.Fix1(map, fn)
+export mapper
 
-wrapperize(x) = esc(x)
+_wrapperize(x) = esc(x)
 
-function wrapperize(expr::Expr)
+function _wrapperize(expr::Expr)
   if expr.head == :block
-    return Expr(:block, wrapperize.(expr.args)...)
+    return Expr(:block, _wrapperize.(expr.args)...)
   elseif expr.head == :tuple
-    return Expr(:tuple, wrapperize.(expr.args)...)
+    return Expr(:tuple, _wrapperize.(expr.args)...)
   elseif @capture(expr, (inputs__,) -> output_)
-    return :(Fn{$(wrapperize(output)),Tuple{$(wrapperize.(inputs)...)}})
+    return :(Fn{$(_wrapperize(output)),Tuple{$(_wrapperize.(inputs)...)}})
   elseif @capture(expr, (input_) -> output_)
-    return :(Fn{$(wrapperize(output)),Tuple{$(wrapperize(input))}})
+    return :(Fn{$(_wrapperize(output)),Tuple{$(_wrapperize(input))}})
   elseif @capture(expr, T_{Args__})
     return esc(expr)
   else
-    error("I can only handle expressions of the form `(inputs...) -> output`, got $(expr|>Base.remove_linenums!)")
+    error(
+      "I can only handle expressions of the form `(inputs...) -> output`, got $(expr|>Base.remove_linenums!)\n$(sprettyprint_expr(expr|>Base.remove_linenums!))",
+    )
   end
 end
 
@@ -327,35 +353,60 @@ end
     T = @Fn (Int -> Int) -> Bool
     is_foo::@Fn Any -> Tuple{Bool, Float64} = […]
 
-Palauttaa parametrisoidun funktiotyypin (`Fn`, lyhennetty `FunctionWrapper` koska mikä vitun järki on nimetä se `FunctionWrappers.FunctionWrapper`iksi). 
+Palauttaa parametrisoidun funktiotyypin (`Fn`, lyhennetty `FunctionWrapper` koska mikä vitun järki on nimetä se `FunctionWrappers.FunctionWrapper`iksi).
 
 Lähde: https://discourse.julialang.org/t/can-functionwrappers-jl-express-higher-order-functions/66404/4
 """
 macro Fn(expr)
-  wrapperize(expr)
+  _wrapperize(expr)
 end
 
-export @Fn
+export @Fn, Fn
 
 @testitem "@Fn" begin
   using Test
   using FunctionWrappers: FunctionWrapper
 
   let T = @Fn((Vector{Bool}) -> UInt), fn = T(@<(undigits(2)))
-    @inferred fn([1, 1, 1])
+    @test @inferred(fn([1, 1, 1])) == 0b111
     @test T == FunctionWrapper{UInt,Tuple{Vector{Bool}}}
   end
-
-
 end
 
-@testitem "Inline struct with Ref" begin
-  using FunctionWrappers: FunctionWrapper
-  using Test
-  struct InlineRefStruct
-    x::Vector{Int}
-  end
-  f = @inferred FunctionWrapper{InlineRefStruct,Tuple{InlineRefStruct}}(identity)
-  v = InlineRefStruct([1, 2, 3])
-  @test @inferred(f(v)) === v
+# TODO: State monad-henkinen viritelmä?
+# HOX: ajatus oli, että parserit vois olla state-monadeja, mutta ongelma on että Parser.S tyyppi muuttuu joka askeleella.
+
+# HOX: tää olis siitä hyvä että sit inferenssi olis ihan lapsellisen helppoa ja luultavassti takuuvarmaa.
+# https://stackoverflow.com/questions/7734756/scalaz-state-monad-examples
+# https://github.com/ulysses4ever/Monads.jl/blob/master/src/Monads.jl
+struct State{S,V}
+  run::@Fn S -> Tuple{S,V}
 end
+
+fntype_output_type(f::Type{<:Fn{Output}}) where {Output} = Type{Output}
+fntype_input_type(f::Type{<:Fn{O,In} where {O}}) where {In} = Type{In}
+
+const TryResult = Union{<:Try.Ok,<:Try.Err}
+
+try_lift(x::TryResult) = x
+try_lift(@nospecialize(x)) = Try.Ok(x)
+try_lift(@nospecialize(x::Exception)) = Try.Err(x)
+
+macro trying(ex)
+  _trying(ex, __source__)
+end
+
+function _trying(ex, source)
+  # TODO: effect inference magic on ex? If compiler says the expression would be a nothrow, could we skip the try/catch completely?
+  # That would assume the effect of running ex won't change, though? ¯\_(ツ)_/¯
+  @esc ex
+  quote
+    try
+      $try_lift($(ex))
+    catch e
+      $Try.Err(e)
+    end
+  end |> MacroTools.flatten |> replace_linenums!(source)
+end
+
+export @trying
